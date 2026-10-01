@@ -168,6 +168,25 @@ history stays readable.
 | `get_nutrition_targets` | Targets in effect on a day plus the full history of target changes |
 | `set_nutrition_targets` | Set daily targets from a date (default today); earlier days keep their old targets |
 
+### Events and schedule
+
+Classes, games, parties and appointments. A recurring series stores one
+standard RFC 5545 RRULE (no DTSTART; the event's start is the first
+occurrence) and is expanded when read. Single dates can be skipped
+(`exdates`), moved, edited or cancelled without touching the rest of the
+series. Deletes only happen when asked.
+
+| Tool | Description |
+|---|---|
+| `create_event` | One-off or recurring event: title, start_at/end_at (or all_day with dates), location, category, notes, `rrule`, `exdates`. Returns the next occurrences and any conflicts in the next 60 days |
+| `get_schedule` | Every occurrence between two dates (max 366 days per call), sorted, with `event_id` and `occurrence_date` |
+| `find_events` | Search events and series by title, location or category |
+| `update_event` | Change a one-off or a whole series; `''` clears location, notes or rrule. Reports single-date edits dropped by a pattern change |
+| `edit_occurrence` | Move, retitle, relocate or cancel one date of a series |
+| `restore_occurrence` | Undo a single-date change or cancellation |
+| `delete_event` | Permanently delete a one-off or a whole series |
+| `check_conflicts` | Timed events overlapping a slot (all-day events don't count) |
+
 ## Resources (read-only)
 
 | URI | Contents |
@@ -176,6 +195,7 @@ history stays readable.
 | `tasks://overdue` | Same payload as `get_overdue_tasks` |
 | `tasks://upcoming` | Same payload as `get_upcoming_tasks` |
 | `nutrition://today` | Same payload as `get_nutrition_day` |
+| `events://today` | Same payload as `get_schedule` for today |
 
 ## Example prompts once connected
 
@@ -187,3 +207,5 @@ history stays readable.
 - "What did I accomplish this week?"
 - "I had 2 eggs and a slice of toast for breakfast."
 - "How am I doing on protein this week?"
+- "Add CS 101, Mon/Wed/Fri 10 to 10:50 through Dec 12, skipping Thanksgiving week."
+- "No class this Friday."

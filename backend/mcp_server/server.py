@@ -21,7 +21,7 @@ Two ways to run this:
 
 import argparse
 import logging
-from datetime import date, time, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import List, Optional
 
 from mcp.server.mcpserver import MCPServer
@@ -33,6 +33,10 @@ from app.config import get_settings
 from app.logging_config import configure_logging
 from app.models.enums import RecurrencePattern, TaskPriority, TaskStatus
 from app.schemas import (
+    EventCreate,
+    EventRead,
+    EventUpdate,
+    OccurrenceEdit,
     FoodEntryCreate,
     FoodEntryRead,
     FoodEntryUpdate,
@@ -42,6 +46,7 @@ from app.schemas import (
     TaskUpdate,
 )
 from app.security import constant_time_equals
+from app.services import events as events_service
 from app.services import nutrition as nutrition_service
 from app.services import recurrence as recurrence_service
 from app.services import tasks as tasks_service
@@ -60,7 +65,10 @@ mcp = MCPServer(
         "daily goals. Also a food log: when the user says what they ate, "
         "estimate calories and macros yourself and record them with "
         "log_food, then tell them their totals and what's left from the "
-        "returned day summary. Dates are ISO 'YYYY-MM-DD', times are "
+        "returned day summary. And a schedule of events (classes, games, "
+        "parties) with standard RRULE recurrence: create_event, "
+        "get_schedule, edit_occurrence for single dates. Dates are ISO "
+        "'YYYY-MM-DD', times are "
         "'HH:MM' 24-hour."
     ),
 )
@@ -638,6 +646,254 @@ def set_nutrition_targets(
 
 
 # ---------------------------------------------------------------------------
+# Events and schedule
+# ---------------------------------------------------------------------------
+
+
+def _event_not_found(event_id: str) -> dict:
+    return {"error": f"No event with id '{event_id}'"}
+
+
+def _event_context(session: Session, event, dropped=None) -> dict:
+    return events_service.with_context(session, event, dropped).model_dump(mode="json")
+
+
+def _parse_dt(value: str, field: str) -> datetime:
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        raise ValueError(f"{field} must be an ISO datetime like 2026-10-01T14:30, got {value!r}.")
+
+
+@mcp.tool()
+def create_event(
+    title: str,
+    start_at: str,
+    end_at: Optional[str] = None,
+    all_day: bool = False,
+    location: Optional[str] = None,
+    category: str = "other",
+    notes: Optional[str] = None,
+    rrule: Optional[str] = None,
+    exdates: Optional[List[str]] = None,
+) -> dict:
+    """Add an event or a recurring series to the user's schedule.
+
+    Times are local 'YYYY-MM-DDTHH:MM'. All-day events (birthdays, game
+    days) take dates: all_day=true and start_at='YYYY-MM-DD'; end_at is
+    the day AFTER the last day, or omit it for a single day. category: one
+    of class, social, sports, work, appointment, other (or a short word).
+
+    To repeat, pass a standard RFC 5545 RRULE without DTSTART, e.g.
+    'FREQ=WEEKLY;BYDAY=MO,WE,FR;UNTIL=20261212' (MWF class through Dec 12),
+    'FREQ=WEEKLY;INTERVAL=2;BYDAY=TH' (every other Thursday),
+    'FREQ=MONTHLY;BYDAY=FR;BYSETPOS=-1' (last Friday of each month).
+    start_at/end_at describe the first occurrence. Give semester-bound
+    series an UNTIL. Skip holidays and breaks with exdates (ISO dates). At
+    most one occurrence per day. When dates are irregular (a football
+    schedule on varying days), create one event per date instead.
+
+    Call check_conflicts first if the user cares about clashes. The result
+    has next_occurrences: read them back so the user can confirm the
+    pattern, plus any conflicts in the next 60 days."""
+    try:
+        payload = EventCreate.model_validate(
+            {
+                "title": title,
+                "start_at": start_at,
+                "end_at": end_at,
+                "all_day": all_day,
+                "location": location,
+                "category": category,
+                "notes": notes,
+                "rrule": rrule,
+                "exdates": exdates or [],
+            }
+        )
+    except ValidationError as exc:
+        return _error(exc)
+    with _session() as session:
+        try:
+            event = events_service.create_event(session, payload, source="mcp")
+        except ValueError as exc:
+            return _error(exc)
+        return _event_context(session, event)
+
+
+@mcp.tool()
+def get_schedule(start_date: str, end_date: Optional[str] = None) -> dict:
+    """Every event occurrence between two dates (inclusive; end defaults
+    to start), sorted by time, recurring series expanded. Each item has
+    event_id and occurrence_date, which edit_occurrence needs. Up to 366
+    days per call."""
+    try:
+        start = _parse_day(start_date, "start_date")
+        end = _parse_day(end_date, "end_date") or start
+        with _session() as session:
+            occs = events_service.occurrences(session, start, end)
+            return {
+                "start_date": start.isoformat(),
+                "end_date": end.isoformat(),
+                "occurrences": [o.model_dump(mode="json") for o in occs],
+                "count": len(occs),
+            }
+    except ValueError as exc:
+        return _error(exc)
+
+
+@mcp.tool()
+def find_events(query: str, limit: int = 20) -> dict:
+    """Find events and series by title, location or category
+    (case-insensitive), e.g. 'CS 101', 'stadium', 'sports'."""
+    with _session() as session:
+        events = [
+            EventRead.model_validate(e).model_dump(mode="json")
+            for e in events_service.search_events(session, query, limit)
+        ]
+        return {"events": events, "count": len(events)}
+
+
+@mcp.tool()
+def update_event(
+    event_id: str,
+    title: Optional[str] = None,
+    start_at: Optional[str] = None,
+    end_at: Optional[str] = None,
+    all_day: Optional[bool] = None,
+    location: Optional[str] = None,
+    category: Optional[str] = None,
+    notes: Optional[str] = None,
+    rrule: Optional[str] = None,
+    exdates: Optional[List[str]] = None,
+) -> dict:
+    """Change a one-off event or a WHOLE series. Pass only the fields to
+    change; pass '' to clear location, notes or rrule (clearing rrule turns
+    a series into a one-off). Changing start_at keeps the duration unless
+    end_at is given. exdates replaces the whole skip list. For ONE date of
+    a series use edit_occurrence instead. dropped_overrides lists
+    single-date changes that no longer fit the new pattern and were
+    removed: tell the user about them."""
+    changes = {
+        k: v
+        for k, v in {
+            "title": title,
+            "start_at": start_at,
+            "end_at": end_at,
+            "all_day": all_day,
+            "location": location,
+            "category": category,
+            "notes": notes,
+            "rrule": rrule,
+            "exdates": exdates,
+        }.items()
+        if v is not None
+    }
+    try:
+        payload = EventUpdate.model_validate(changes)
+    except ValidationError as exc:
+        return _error(exc)
+    with _session() as session:
+        event = events_service.get_event(session, event_id)
+        if event is None:
+            return _event_not_found(event_id)
+        try:
+            event, dropped = events_service.update_event(session, event, payload)
+        except ValueError as exc:
+            return _error(exc)
+        return _event_context(session, event, dropped)
+
+
+@mcp.tool()
+def edit_occurrence(
+    event_id: str,
+    day: str,
+    cancel: bool = False,
+    start_at: Optional[str] = None,
+    end_at: Optional[str] = None,
+    title: Optional[str] = None,
+    location: Optional[str] = None,
+    notes: Optional[str] = None,
+) -> dict:
+    """Change or cancel ONE date of a recurring series without touching
+    the rest ('no class Monday', 'this week's game is at 7pm'). day is the
+    occurrence_date from get_schedule (the original date, even if it was
+    moved). cancel=true skips that date. Otherwise pass the new start_at
+    (end keeps the duration unless end_at is given; it may be on another
+    day), title, location or notes. Undo with restore_occurrence."""
+    changes = {
+        k: v
+        for k, v in {
+            "cancel": cancel,
+            "start_at": start_at,
+            "end_at": end_at,
+            "title": title,
+            "location": location,
+            "notes": notes,
+        }.items()
+        if v is not None
+    }
+    try:
+        parsed_day = _parse_day(day, "day")
+        payload = OccurrenceEdit.model_validate(changes)
+    except ValueError as exc:
+        return _error(exc)
+    with _session() as session:
+        event = events_service.get_event(session, event_id)
+        if event is None:
+            return _event_not_found(event_id)
+        try:
+            return events_service.edit_occurrence(session, event, parsed_day, payload).model_dump(mode="json")
+        except ValueError as exc:
+            return _error(exc)
+
+
+@mcp.tool()
+def restore_occurrence(event_id: str, day: str) -> dict:
+    """Undo edit_occurrence for one date: un-cancel it and drop any
+    single-date changes so it matches the series again."""
+    try:
+        parsed_day = _parse_day(day, "day")
+    except ValueError as exc:
+        return _error(exc)
+    with _session() as session:
+        event = events_service.get_event(session, event_id)
+        if event is None:
+            return _event_not_found(event_id)
+        try:
+            return events_service.restore_occurrence(session, event, parsed_day).model_dump(mode="json")
+        except ValueError as exc:
+            return _error(exc)
+
+
+@mcp.tool()
+def delete_event(event_id: str) -> dict:
+    """Permanently delete a one-off event or a WHOLE series (all dates).
+    Only when the user asks. To drop one date use edit_occurrence with
+    cancel=true."""
+    with _session() as session:
+        event = events_service.get_event(session, event_id)
+        if event is None:
+            return _event_not_found(event_id)
+        events_service.delete_event(session, event)
+        return {"deleted_id": event_id}
+
+
+@mcp.tool()
+def check_conflicts(start_at: str, end_at: str) -> dict:
+    """Timed events overlapping a slot ('YYYY-MM-DDTHH:MM' local). Use
+    before adding something when the user cares about clashes. All-day
+    events are not counted as conflicts."""
+    try:
+        start = _parse_dt(start_at, "start_at")
+        end = _parse_dt(end_at, "end_at")
+        with _session() as session:
+            occs = events_service.conflicts(session, start, end)
+            return {"occurrences": [o.model_dump(mode="json") for o in occs], "count": len(occs)}
+    except ValueError as exc:
+        return _error(exc)
+
+
+# ---------------------------------------------------------------------------
 # Resources (read-only)
 # ---------------------------------------------------------------------------
 
@@ -664,6 +920,12 @@ def resource_upcoming() -> List[dict]:
 def resource_nutrition_today() -> dict:
     """Today's food log, totals and targets."""
     return get_nutrition_day()
+
+
+@mcp.resource("events://today")
+def resource_events_today() -> dict:
+    """Today's schedule."""
+    return get_schedule(local_today().isoformat())
 
 
 # ---------------------------------------------------------------------------
