@@ -6,14 +6,14 @@ import AppShell from "@/components/AppShell";
 import { THEME_BOOT_SCRIPT } from "@/lib/theme";
 
 export const metadata: Metadata = {
-  title: "Tasks",
-  description: "Personal task manager",
+  title: "Look",
+  description: "Tasks, schedule and food, in one place.",
 };
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f3f4f8" },
-    { media: "(prefers-color-scheme: dark)", color: "#111318" },
+    { media: "(prefers-color-scheme: light)", color: "#f2ead5" },
+    { media: "(prefers-color-scheme: dark)", color: "#0b1e3f" },
   ],
 };
 

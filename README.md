@@ -1,4 +1,6 @@
-# Personal Task Manager
+# Look
+
+A self-hosted personal task manager, schedule and food log.
 
 A self-hosted task manager that is the single source of truth for your
 tasks — LeetCode/DSA practice, school, projects, errands, and recurring

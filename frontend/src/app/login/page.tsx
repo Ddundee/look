@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckIcon, CircleNotchIcon, EyeIcon, EyeSlashIcon, WarningCircleIcon } from "@phosphor-icons/react";
+import { TreePalmIcon, CircleNotchIcon, EyeIcon, EyeSlashIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import { api, ApiError } from "@/lib/api";
 import { BUTTON_PRIMARY, FIELD, LABEL } from "@/lib/ui";
 
@@ -38,11 +38,11 @@ export default function LoginPage() {
       <div className="anim-pop w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center gap-4 text-center">
           <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-accent text-accent-fg elev-1">
-            <CheckIcon weight="bold" className="h-6 w-6" aria-hidden />
+            <TreePalmIcon weight="fill" className="h-6 w-6" aria-hidden />
           </span>
           <div>
-            <h1 className="text-xl font-semibold tracking-tight text-fg">Sign in to Tasks</h1>
-            <p className="mt-1 text-sm text-fg-muted">Your self-hosted task manager.</p>
+            <h1 className="text-xl font-semibold tracking-tight text-fg">Sign in to Look</h1>
+            <p className="mt-1 text-sm text-fg-muted">Tasks, schedule and food, in one place.</p>
           </div>
         </div>
 

@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   CalendarDotsIcon,
   CheckCircleIcon,
-  CheckIcon,
+  TreePalmIcon,
   ForkKnifeIcon,
   GearSixIcon,
   ListChecksIcon,
@@ -40,9 +40,9 @@ function BrandMark() {
   return (
     <div className="flex items-center gap-2.5">
       <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent text-accent-fg">
-        <CheckIcon weight="bold" className="h-4 w-4" aria-hidden />
+        <TreePalmIcon weight="fill" className="h-4 w-4" aria-hidden />
       </span>
-      <span className="text-[15px] font-semibold tracking-tight text-fg">Tasks</span>
+      <span className="text-[15px] font-semibold tracking-tight text-fg">Look</span>
     </div>
   );
 }
@@ -170,7 +170,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   const currentLabel =
     NAV.find((n) => pathname?.startsWith(n.href))?.label ??
-    (pathname?.startsWith("/settings") ? "Settings" : "Tasks");
+    (pathname?.startsWith("/settings") ? "Settings" : "Look");
 
   return (
     <div className="flex h-dvh overflow-hidden bg-canvas">

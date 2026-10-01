@@ -11,7 +11,7 @@ function Bar({ value, goal, over, thick }: { value: number; goal: number; over: 
     <span className={`relative block overflow-hidden rounded-full bg-surface-2 ${thick ? "h-2.5" : "h-1.5"}`}>
       <span
         className={`absolute inset-y-0 left-0 rounded-full transition-[width] duration-500 ease-out ${
-          over ? "bg-warn" : "bg-accent"
+          over ? "bg-sand" : "bg-accent"
         }`}
         style={{ width: `${pct}%` }}
       />

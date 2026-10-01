@@ -6,7 +6,7 @@ export const EVENT_CATEGORIES = ["class", "social", "sports", "work", "appointme
 // A colored marker beside the category name (never color alone). Classes
 // are spelled out in full for Tailwind's static scanner.
 const HUES: Record<string, string> = {
-  class: "text-amber-500",
+  class: "text-fuchsia-500",
   social: "text-pink-500",
   sports: "text-emerald-500",
   work: "text-violet-500",
