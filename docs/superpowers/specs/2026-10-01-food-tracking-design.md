@@ -197,4 +197,4 @@ Backend (pytest, following the existing fixtures in `tests/conftest.py`):
 
 Frontend: `tsc`, `eslint`, `next build`, then a browser pass of
 `/nutrition` with real entries in light and dark mode and at phone width.
-The existing 71 backend tests must still pass.
+The existing backend tests (58) must still pass.
