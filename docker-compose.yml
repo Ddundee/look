@@ -25,7 +25,9 @@ services:
     build: ./backend
     image: ${IMAGE_PREFIX:-ghcr.io/ddundee/look}-backend:latest
     restart: unless-stopped
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    # Apply database migrations first; if they fail the container exits
+    # instead of serving against the wrong schema (see docs/DATABASE.md).
+    command: ["sh", "-c", "python -m app.migrate && exec uvicorn app.main:app --host 0.0.0.0 --port 8000"]
     env_file: .env
     environment:
       # Always bind to all interfaces INSIDE the container's own network
@@ -53,7 +55,9 @@ services:
     build: ./backend
     image: ${IMAGE_PREFIX:-ghcr.io/ddundee/look}-backend:latest
     restart: unless-stopped
-    command: ["python", "-m", "mcp_server.server", "--transport", "http"]
+    # Same migrate-then-start as the backend; an advisory lock in app.migrate
+    # makes whichever starts second wait instead of racing.
+    command: ["sh", "-c", "python -m app.migrate && exec python -m mcp_server.server --transport http"]
     env_file: .env
     environment:
       BIND_HOST: 0.0.0.0
@@ -100,8 +104,9 @@ services:
       retries: 5
       start_period: 10s
 
-  # Self-update helper (see updater/updater.py). Pulls and restarts
-  # backend, mcp and frontend when you press Update in the web app. Never
+  # Self-update helper (see updater/updater.py). Pulls, backs up the
+  # database to ./backups, then restarts backend, mcp and frontend (which
+  # apply any migrations) when you press Update in the web app. Never
   # touches db, the tunnel or itself. No ports: only the backend reaches
   # it, on this compose network, with API_TOKEN. Mounting the Docker
   # socket gives it control of Docker, which is what updating requires.
@@ -115,9 +120,12 @@ services:
       UPDATER_GITHUB_REPO: ${UPDATER_GITHUB_REPO:-Ddundee/look}
       UPDATER_WORKFLOW: ${UPDATER_WORKFLOW:-docker-publish.yml}
       UPDATER_SERVICES: ${UPDATER_SERVICES:-backend mcp frontend}
+      UPDATER_BACKUP_DIR: /backups
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - .:/project:ro
+      # pg_dump before every update lands here, next to scripts/backup.sh's.
+      - ./backups:/backups
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=3)"]
       interval: 30s

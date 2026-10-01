@@ -2,9 +2,11 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from sqlmodel import Session
 
 from app import db
+from app import migrate as migrations
 from app.config import get_settings
 from app.logging_config import configure_logging
 from app.routers import auth, events, nutrition, recurring, system, tasks, today
@@ -19,7 +21,10 @@ logger = logging.getLogger("todo_app")
 async def lifespan(_app: FastAPI):
     settings = get_settings()
     logger.info("Starting up (db_engine=%s)", settings.db_engine)
-    db.init_db()
+    # Migrations run before the app starts (python -m app.migrate); refuse
+    # to serve against a schema this code version wasn't built for.
+    revision = migrations.assert_at_head(db.engine)
+    logger.info("Database schema at revision %s", revision)
     with Session(db.engine) as session:
         ensure_admin_user(session)
         if settings.seed_demo_data:
@@ -53,5 +58,13 @@ app.include_router(system.router)
 
 
 @app.get("/health")
-def health() -> dict:
-    return {"status": "ok"}
+def health():
+    try:
+        db_revision = migrations.database_revision(db.engine)
+    except Exception:
+        return JSONResponse(status_code=503, content={"status": "error", "detail": "Database unavailable"})
+    return {
+        "status": "ok",
+        "version": get_settings().app_revision or None,
+        "db_revision": db_revision,
+    }

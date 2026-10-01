@@ -29,6 +29,7 @@ from pydantic import ValidationError
 from sqlmodel import Session
 
 from app import db
+from app.migrate import assert_at_head
 from app.config import get_settings
 from app.logging_config import configure_logging
 from app.models.enums import RecurrencePattern, TaskPriority, TaskStatus
@@ -975,7 +976,9 @@ def main() -> None:
     parser.add_argument("--transport", choices=["stdio", "http"], default="http")
     args = parser.parse_args()
 
-    db.init_db()
+    # Migrations run before this starts (python -m app.migrate); refuse to
+    # serve against a schema this code version wasn't built for.
+    assert_at_head(db.engine)
 
     if args.transport == "stdio":
         logger.info("Starting MCP server on stdio transport")
