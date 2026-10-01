@@ -1,4 +1,6 @@
 import type {
+  UpdateJob,
+  UpdateStatus,
   CalendarEvent,
   EventPayload,
   EventWithContext,
@@ -185,4 +187,9 @@ export const api = {
     }),
   restoreOccurrence: (id: string, day: string) =>
     request<Occurrence>(`/api/events/${id}/occurrences/${day}`, { method: "DELETE" }),
+
+  getVersion: () => request<{ revision: string | null }>("/api/system/version"),
+  getUpdateStatus: (refresh = false) =>
+    request<UpdateStatus>(`/api/system/update${qs({ refresh: refresh || undefined })}`),
+  startUpdate: () => request<{ job: UpdateJob }>("/api/system/update", { method: "POST" }),
 };

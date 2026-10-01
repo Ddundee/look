@@ -245,3 +245,26 @@ export interface OccurrenceEditPayload {
   location?: string | null;
   notes?: string | null;
 }
+
+// ---- Self-update ------------------------------------------------------------
+
+export type UpdateJobState = "idle" | "pulling" | "restarting" | "done" | "failed";
+
+export interface UpdateJob {
+  state: UpdateJobState;
+  error: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  target: string | null;
+}
+
+export interface UpdateStatus {
+  enabled: boolean;
+  current?: { backend: string | null; frontend: string | null };
+  latest?: { sha: string; published_at: string } | null;
+  update_available?: boolean;
+  changes?: { sha: string; message: string }[];
+  checked_at?: string | null;
+  check_error?: string | null;
+  job?: UpdateJob;
+}

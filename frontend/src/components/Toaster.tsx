@@ -1,40 +1,44 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { CheckCircleIcon, InfoIcon, WarningCircleIcon, XIcon } from "@phosphor-icons/react";
-import { dismissToast, getServerToasts, getToasts, subscribeToasts } from "@/lib/toast";
+import { Toaster as Sonner } from "sonner";
+import { CheckCircleIcon, CircleNotchIcon, InfoIcon, WarningCircleIcon } from "@phosphor-icons/react";
+import { getServerThemeSnapshot, getThemeSnapshot, subscribeTheme } from "@/lib/theme";
 
-const ICONS = {
-  success: <CheckCircleIcon weight="fill" className="h-4 w-4 shrink-0 text-accent" aria-hidden />,
-  error: <WarningCircleIcon weight="fill" className="h-4 w-4 shrink-0 text-danger" aria-hidden />,
-  info: <InfoIcon weight="fill" className="h-4 w-4 shrink-0 text-fg-faint" aria-hidden />,
-};
-
+/** Sonner host, themed with the app's tokens and following the manual
+ * light/dark toggle rather than only the OS preference. */
 export default function Toaster() {
-  const toasts = useSyncExternalStore(subscribeToasts, getToasts, getServerToasts);
+  const theme = useSyncExternalStore(subscribeTheme, getThemeSnapshot, getServerThemeSnapshot);
 
   return (
-    <div
-      aria-live="polite"
-      role="status"
-      className="pointer-events-none fixed inset-x-0 bottom-4 z-[70] flex flex-col items-center gap-2 px-4 sm:bottom-6"
-    >
-      {toasts.map((t) => (
-        <div
-          key={t.id}
-          className="anim-pop pointer-events-auto flex max-w-sm items-center gap-2.5 rounded-xl bg-surface py-2.5 pl-3.5 pr-2 text-sm text-fg elev-3"
-        >
-          {ICONS[t.kind]}
-          <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{t.message}</span>
-          <button
-            onClick={() => dismissToast(t.id)}
-            aria-label="Dismiss notification"
-            className="inline-flex h-6 w-6 items-center justify-center rounded-md text-fg-faint hover:bg-surface-2 hover:text-fg"
-          >
-            <XIcon className="h-3.5 w-3.5" aria-hidden />
-          </button>
-        </div>
-      ))}
-    </div>
+    <Sonner
+      theme={theme}
+      position="bottom-center"
+      visibleToasts={3}
+      gap={8}
+      closeButton
+      icons={{
+        success: <CheckCircleIcon weight="fill" className="h-4 w-4 text-accent" aria-hidden />,
+        error: <WarningCircleIcon weight="fill" className="h-4 w-4 text-danger" aria-hidden />,
+        info: <InfoIcon weight="fill" className="h-4 w-4 text-fg-faint" aria-hidden />,
+        loading: <CircleNotchIcon className="h-4 w-4 animate-spin text-accent" aria-hidden />,
+      }}
+      style={
+        {
+          "--normal-bg": "var(--surface)",
+          "--normal-border": "var(--line)",
+          "--normal-text": "var(--fg)",
+          "--border-radius": "12px",
+        } as React.CSSProperties
+      }
+      toastOptions={{
+        classNames: {
+          toast: "font-sans elev-3",
+          description: "text-fg-muted!",
+          actionButton: "bg-accent! text-accent-fg! font-medium!",
+          cancelButton: "bg-surface-2! text-fg!",
+        },
+      }}
+    />
   );
 }

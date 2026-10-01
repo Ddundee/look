@@ -4,6 +4,7 @@ import { useState, useSyncExternalStore } from "react";
 import CodeBlock from "@/components/CodeBlock";
 import { PlugsConnectedIcon, OpenAiLogoIcon } from "@phosphor-icons/react";
 import { PageHeader } from "@/components/PageParts";
+import VersionSection from "@/components/VersionSection";
 import { CARD, FAINT, INLINE_CODE, LINK, MUTED, SECTION_HEADING } from "@/lib/ui";
 
 // Never notifies — the hostname doesn't change during a session, so this
@@ -285,6 +286,8 @@ export default function SettingsPage() {
           </p>
         </div>
       </section>
+
+      <VersionSection />
     </div>
   );
 }

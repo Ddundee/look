@@ -24,6 +24,7 @@ import { useNavCounts, type NavCounts } from "@/lib/useNavCounts";
 import { ICON_BUTTON } from "@/lib/ui";
 import ThemeToggle from "./ThemeToggle";
 import Toaster from "./Toaster";
+import UpdateChecker from "./UpdateChecker";
 
 const NAV: { href: string; label: string; icon: Icon; count?: keyof NavCounts }[] = [
   { href: "/dashboard", label: "Dashboard", icon: SquaresFourIcon },
@@ -242,6 +243,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <Toaster />
+      <UpdateChecker />
     </div>
   );
 }
