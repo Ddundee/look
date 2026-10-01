@@ -1,4 +1,10 @@
 import type {
+  CalendarEvent,
+  EventPayload,
+  EventWithContext,
+  Occurrence,
+  OccurrenceEditPayload,
+  ScheduleResponse,
   DaySummary,
   FoodEntry,
   FoodEntryPayload,
@@ -161,4 +167,22 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(payload),
     }),
+
+  getSchedule: (start_date: string, end_date?: string, include_cancelled?: boolean) =>
+    request<ScheduleResponse>(`/api/events/schedule${qs({ start_date, end_date, include_cancelled })}`),
+  previewEvent: (p: { start_at: string; end_at?: string; all_day?: boolean; rrule: string }) =>
+    request<Occurrence[]>(`/api/events/preview${qs(p)}`),
+  getEvent: (id: string) => request<CalendarEvent>(`/api/events/${id}`),
+  createEvent: (payload: EventPayload) =>
+    request<EventWithContext>("/api/events", { method: "POST", body: JSON.stringify(payload) }),
+  updateEvent: (id: string, payload: EventPayload) =>
+    request<EventWithContext>(`/api/events/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  deleteEvent: (id: string) => request<{ deleted_id: string }>(`/api/events/${id}`, { method: "DELETE" }),
+  editOccurrence: (id: string, day: string, payload: OccurrenceEditPayload) =>
+    request<Occurrence>(`/api/events/${id}/occurrences/${day}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+  restoreOccurrence: (id: string, day: string) =>
+    request<Occurrence>(`/api/events/${id}/occurrences/${day}`, { method: "DELETE" }),
 };

@@ -16,3 +16,16 @@ export function onTasksChanged(listener: Listener): () => void {
 export function notifyTasksChanged(): void {
   listeners.forEach((l) => l());
 }
+
+// Same pattern for calendar events, so the Calendar and Today pages refresh
+// after an event is added or edited from anywhere.
+const eventListeners = new Set<Listener>();
+
+export function onEventsChanged(listener: Listener): () => void {
+  eventListeners.add(listener);
+  return () => eventListeners.delete(listener);
+}
+
+export function notifyEventsChanged(): void {
+  eventListeners.forEach((l) => l());
+}

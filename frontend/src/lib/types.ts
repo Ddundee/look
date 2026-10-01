@@ -176,3 +176,72 @@ export interface NutritionTargetsPayload {
   fat_g?: number | null;
   effective_from?: string;
 }
+
+// ---- Events ---------------------------------------------------------------
+
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  location: string | null;
+  notes: string | null;
+  category: string;
+  all_day: boolean;
+  start_at: string; // local "YYYY-MM-DDTHH:MM:SS"
+  end_at: string;
+  rrule: string | null;
+  exdates: string[];
+  source: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Occurrence {
+  event_id: string;
+  occurrence_date: string;
+  start_at: string;
+  end_at: string;
+  all_day: boolean;
+  title: string;
+  location: string | null;
+  category: string;
+  notes: string | null;
+  recurring: boolean;
+  rrule: string | null;
+  overridden: boolean;
+  cancelled: boolean;
+}
+
+export interface EventWithContext {
+  event: CalendarEvent;
+  next_occurrences: Occurrence[];
+  conflicts: Occurrence[];
+  dropped_overrides: string[];
+}
+
+export interface ScheduleResponse {
+  start_date: string;
+  end_date: string;
+  occurrences: Occurrence[];
+  count: number;
+}
+
+export interface EventPayload {
+  title?: string;
+  start_at?: string;
+  end_at?: string | null;
+  all_day?: boolean;
+  location?: string | null;
+  category?: string;
+  notes?: string | null;
+  rrule?: string | null;
+  exdates?: string[];
+}
+
+export interface OccurrenceEditPayload {
+  cancel?: boolean;
+  start_at?: string;
+  end_at?: string;
+  title?: string;
+  location?: string | null;
+  notes?: string | null;
+}

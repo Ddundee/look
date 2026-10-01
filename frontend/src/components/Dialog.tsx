@@ -12,12 +12,14 @@ interface Props {
   footer: React.ReactNode;
   children: React.ReactNode;
   size?: "md" | "sm";
+  /** Show the "⌘ ↵ to save" hint (off for dialogs that only offer choices). */
+  hint?: boolean;
 }
 
 /** Modal form shell: portal, Escape to close, Tab trapped inside, focus
  * restored on close, background scroll locked, Cmd/Ctrl+Enter submits,
  * bottom sheet on phones. */
-export default function Dialog({ title, onClose, onSubmit, footer, children, size = "md" }: Props) {
+export default function Dialog({ title, onClose, onSubmit, footer, children, size = "md", hint = true }: Props) {
   const formRef = useRef<HTMLFormElement>(null);
   const titleId = useId();
   // Callers pass an inline arrow, so read it through a ref; otherwise the
@@ -97,12 +99,14 @@ export default function Dialog({ title, onClose, onSubmit, footer, children, siz
         </div>
         <div className="scroll-area space-y-4 overflow-y-auto px-5 pb-5 pt-2">{children}</div>
         <div className="flex items-center justify-between gap-2 border-t border-line px-5 py-3">
-          <span className="hidden items-center gap-1 text-xs text-fg-faint sm:inline-flex">
-            <kbd className={KBD}>⌘</kbd>
-            <kbd className={KBD}>↵</kbd>
-            to save
-          </span>
-          <div className="ml-auto flex gap-2">{footer}</div>
+          {hint && (
+            <span className="hidden items-center gap-1 text-xs text-fg-faint sm:inline-flex">
+              <kbd className={KBD}>⌘</kbd>
+              <kbd className={KBD}>↵</kbd>
+              to save
+            </span>
+          )}
+          <div className="ml-auto flex flex-wrap justify-end gap-2">{footer}</div>
         </div>
       </form>
     </div>,
