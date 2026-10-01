@@ -23,6 +23,9 @@ RUN npm run build
 FROM node:20-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+# Git commit this image was built from (CI passes --build-arg).
+ARG APP_REVISION=
+ENV APP_REVISION=$APP_REVISION
 
 # node:20-slim already ships a non-root "node" user (uid/gid 1000) —
 # reuse it instead of creating a second uid 1000 user, which errors.

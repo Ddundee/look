@@ -32,11 +32,12 @@ One Postgres database backs both the REST API (used by the web UI) and the
 MCP server — they're two processes sharing the same codebase and the same
 data, not two separate systems to keep in sync.
 
-Prebuilt multi-arch (amd64/arm64) images are published to Docker Hub as
-[`ddundee/todo-app-backend`](https://hub.docker.com/r/ddundee/todo-app-backend)
-and [`ddundee/todo-app-frontend`](https://hub.docker.com/r/ddundee/todo-app-frontend)
-on every push to `main` (see `.github/workflows/docker-publish.yml`), so
-`docker compose pull` works out of the box instead of building from source.
+Prebuilt multi-arch (amd64/arm64) images are published to GitHub Container
+Registry as `ghcr.io/ddundee/look-backend`, `look-frontend` and
+`look-updater` on every push to `main` (see
+`.github/workflows/docker-publish.yml`), so `docker compose pull` works out
+of the box instead of building from source. The web app offers new versions
+as a one-click update; see `docs/DEPLOYMENT.md`.
 
 See [`docs/TASK_MODEL.md`](docs/TASK_MODEL.md) for the data model and
 priority-scoring logic, [`docs/MCP.md`](docs/MCP.md) for the full list of
@@ -182,7 +183,7 @@ Put `backup.sh` in cron for automatic daily backups:
 ```bash
 cd todo-app
 git pull
-docker compose pull            # grab the latest prebuilt images from Docker Hub
+docker compose pull            # grab the latest prebuilt images from ghcr.io
 docker compose up -d           # restarts only the services that changed
 ```
 

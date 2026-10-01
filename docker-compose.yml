@@ -1,3 +1,8 @@
+# Project name is pinned: named volumes are prefixed with it
+# (todo-app_postgres_data), and the updater runs Compose from /project,
+# where the folder-derived default would differ and start an empty DB.
+name: todo-app
+
 services:
   db:
     image: postgres:16-alpine
@@ -18,7 +23,7 @@ services:
 
   backend:
     build: ./backend
-    image: ${DOCKERHUB_NAMESPACE:-ddundee}/todo-app-backend:latest
+    image: ${IMAGE_PREFIX:-ghcr.io/ddundee/look}-backend:latest
     restart: unless-stopped
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
     env_file: .env
@@ -29,6 +34,7 @@ services:
       # from .env actually applies.
       BIND_HOST: 0.0.0.0
       POSTGRES_HOST: db
+      UPDATER_URL: ${UPDATER_URL:-http://updater:8080}
     volumes:
       - backend_data:/app/data
     ports:
@@ -45,7 +51,7 @@ services:
 
   mcp:
     build: ./backend
-    image: ${DOCKERHUB_NAMESPACE:-ddundee}/todo-app-backend:latest
+    image: ${IMAGE_PREFIX:-ghcr.io/ddundee/look}-backend:latest
     restart: unless-stopped
     command: ["python", "-m", "mcp_server.server", "--transport", "http"]
     env_file: .env
@@ -74,7 +80,7 @@ services:
         # not at container start) — must match the `backend` service name
         # above.
         INTERNAL_API_BASE_URL: http://backend:8000
-    image: ${DOCKERHUB_NAMESPACE:-ddundee}/todo-app-frontend:latest
+    image: ${IMAGE_PREFIX:-ghcr.io/ddundee/look}-frontend:latest
     restart: unless-stopped
     ports:
       - "${BIND_HOST:-0.0.0.0}:${FRONTEND_PORT:-3000}:3000"
@@ -93,6 +99,31 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+
+  # Self-update helper (see updater/updater.py). Pulls and restarts
+  # backend, mcp and frontend when you press Update in the web app. Never
+  # touches db, the tunnel or itself. No ports: only the backend reaches
+  # it, on this compose network, with API_TOKEN. Mounting the Docker
+  # socket gives it control of Docker, which is what updating requires.
+  updater:
+    build: ./updater
+    image: ${IMAGE_PREFIX:-ghcr.io/ddundee/look}-updater:latest
+    restart: unless-stopped
+    working_dir: /project
+    environment:
+      API_TOKEN: ${API_TOKEN}
+      UPDATER_GITHUB_REPO: ${UPDATER_GITHUB_REPO:-Ddundee/look}
+      UPDATER_WORKFLOW: ${UPDATER_WORKFLOW:-docker-publish.yml}
+      UPDATER_SERVICES: ${UPDATER_SERVICES:-backend mcp frontend}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/project:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
 
   # OpenAI Secure MCP Tunnel client — outbound-only connection that lets
   # ChatGPT/Codex/the Responses API reach the `mcp` service above without

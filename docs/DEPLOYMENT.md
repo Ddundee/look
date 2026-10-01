@@ -65,8 +65,8 @@ IP instead).
 
 ## 4. Start the stack
 
-Images are published to Docker Hub (`ddundee/todo-app-backend`,
-`ddundee/todo-app-frontend`) by CI on every push to `main`, prebuilt for
+Images are published to GitHub Container Registry (`ghcr.io/ddundee/look-*`,
+see "Published images" below) by CI on every push to `main`, prebuilt for
 both `amd64` and `arm64` — pulling them is much faster than building on a
 Pi:
 
@@ -119,53 +119,62 @@ needed after a power cycle. Verify by rebooting once and checking
 
 ## Updating
 
+**From the web app (normal way).** Every push to `main` publishes new
+images. A few minutes later the app shows an "Update available" toast
+listing what changed. Press **Update**: the `updater` container pulls the
+new images and restarts `backend`, `mcp` and `frontend`, then the page
+reloads itself on the new version (roughly 10 to 30 seconds of downtime).
+**Later** hides the toast until the next new version. Settings → Version
+shows what's running and has a **Check for updates** button.
+
+The updater never touches `db` (your data lives in the
+`todo-app_postgres_data` volume), the tunnel, or itself.
+
+**From a shell (fallback, and the only way to update the updater):**
+
 ```bash
 cd todo-app
-git pull
-docker compose pull   # grab the latest prebuilt images from Docker Hub
+git pull              # only needed if docker-compose.yml itself changed
+docker compose pull   # latest images from ghcr.io
 docker compose up -d
 ```
 
-(Use `docker compose up -d --build` instead of `pull` if you're running a
-fork without the Docker Hub CI wired up, or have local changes.)
+This only restarts services whose image actually changed. Take a backup
+before anything bigger than a routine update; see the root `README.md`.
 
-This only restarts services whose image actually changed. Your data is
-untouched (it lives in the `postgres_data` Docker volume, independent of
-the app containers). Take a backup first for anything bigger than a
-routine pull — see the root `README.md`.
+To turn in-app updates off, set `UPDATER_URL=` (empty) in `.env` and
+`docker compose stop updater`.
 
-## Docker Hub images and multi-arch builds
+The Compose project name is pinned to `todo-app` at the top of
+`docker-compose.yml`. Don't change it: Docker names the database volume
+after it, and a different name would start an empty database.
 
-`.github/workflows/docker-publish.yml` builds and pushes both images —
-`ddundee/todo-app-backend` and `ddundee/todo-app-frontend` — for
-`linux/amd64` and `linux/arm64` on every push to `main`, tagged `latest`
-and with the short commit SHA. That's what step 4 above pulls from.
+## Published images (GitHub Container Registry)
 
-If you fork this repo and want your own images, set two repository
-secrets (Settings → Secrets and variables → Actions):
+`.github/workflows/docker-publish.yml` builds three images for
+`linux/amd64` and `linux/arm64` on every push to `main` and pushes them
+to GHCR, tagged `latest` and with the short commit SHA:
 
-- `DOCKERHUB_USERNAME` — your Docker Hub username
-- `DOCKERHUB_TOKEN` — a Docker Hub access token (hub.docker.com → Account
-  Settings → Security → New Access Token; Read & Write is enough)
+- `ghcr.io/ddundee/look-backend` (backend and mcp)
+- `ghcr.io/ddundee/look-frontend`
+- `ghcr.io/ddundee/look-updater`
 
-and update the `${DOCKERHUB_NAMESPACE:-ddundee}` default in
-`docker-compose.yml` to your own namespace (or set `DOCKERHUB_NAMESPACE`
-in `.env` to override it without editing the file).
+It logs in with the workflow's own `GITHUB_TOKEN`, so there are no secrets
+to set. Each image records the commit it was built from
+(`org.opencontainers.image.revision`), which is how the updater knows
+whether you're behind.
 
-To build and push manually instead of relying on CI (e.g. from an amd64
-dev machine, targeting the Pi's arm64 without building natively on it):
+**One-time setup:** new GHCR packages start private. After the first
+successful run, make each package public so machines can pull without
+logging in: GitHub → your profile → **Packages** → the package →
+**Package settings** → **Change visibility** → **Public**.
 
-```bash
-docker login
-docker buildx build --platform linux/amd64,linux/arm64 \
-  -t ddundee/todo-app-backend:latest --push ./backend
-docker buildx build --platform linux/amd64,linux/arm64 \
-  -t ddundee/todo-app-frontend:latest --push ./frontend
-```
+Forks: set `IMAGE_PREFIX` (e.g. `ghcr.io/yourname/look`) and
+`UPDATER_GITHUB_REPO` (e.g. `yourname/look`) in `.env`.
 
-Building natively on the Pi (`docker compose up -d --build` run directly
-on the Pi) also works and avoids all of this — Docker automatically pulls
-the correct arm64 base images since it matches the host architecture.
+Building natively instead (`docker compose up -d --build`, on the Pi or
+anywhere) also works; those local images carry no commit label, so the
+app will offer the published update once.
 
 ## Connecting ChatGPT via OpenAI Secure MCP Tunnel (optional)
 
