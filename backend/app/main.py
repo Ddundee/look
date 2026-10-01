@@ -7,7 +7,7 @@ from sqlmodel import Session
 from app import db
 from app.config import get_settings
 from app.logging_config import configure_logging
-from app.routers import auth, recurring, tasks, today
+from app.routers import auth, nutrition, recurring, tasks, today
 from app.seed import seed_demo_data
 from app.services.auth import ensure_admin_user
 
@@ -47,6 +47,7 @@ app.include_router(auth.router)
 app.include_router(tasks.router)
 app.include_router(today.router)
 app.include_router(recurring.router)
+app.include_router(nutrition.router)
 
 
 @app.get("/health")
