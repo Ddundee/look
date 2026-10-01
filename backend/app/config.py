@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     seed_demo_data: bool = False
 
+    # Self-update: internal URL of the updater container (empty = feature
+    # off) and the git commit this image was built from (set by CI).
+    updater_url: str = ""
+    app_revision: str = ""
+
     @property
     def database_url(self) -> str:
         if self.db_engine == "sqlite":

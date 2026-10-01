@@ -16,6 +16,11 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends libpq5 curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Git commit this image was built from (CI passes --build-arg); reported
+# at /api/system/version so the web app can tell when it's been updated.
+ARG APP_REVISION=
+ENV APP_REVISION=$APP_REVISION
+
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
