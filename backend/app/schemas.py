@@ -293,3 +293,118 @@ class FoodDeleteResult(BaseModel):
 class FoodEntryList(BaseModel):
     entries: List[FoodEntryRead]
     count: int
+
+
+# ---------------------------------------------------------------------------
+# Events
+# ---------------------------------------------------------------------------
+
+
+def _clean_title(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    value = value.strip()
+    if not value:
+        raise ValueError("title can't be blank")
+    return value
+
+
+class EventCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    start_at: datetime
+    end_at: Optional[datetime] = None  # all-day events default to one day
+    all_day: bool = False
+    location: Optional[str] = Field(default=None, max_length=200)
+    category: str = Field(default="other", min_length=1, max_length=50)
+    notes: Optional[str] = None
+    rrule: Optional[str] = None
+    exdates: List[date] = Field(default_factory=list)
+
+    @field_validator("title")
+    @classmethod
+    def _title(cls, v: Optional[str]) -> Optional[str]:
+        return _clean_title(v)
+
+
+class EventUpdate(BaseModel):
+    title: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    start_at: Optional[datetime] = None
+    end_at: Optional[datetime] = None
+    all_day: Optional[bool] = None
+    location: Optional[str] = Field(default=None, max_length=200)
+    category: Optional[str] = Field(default=None, min_length=1, max_length=50)
+    notes: Optional[str] = None
+    rrule: Optional[str] = None
+    exdates: Optional[List[date]] = None
+
+    @field_validator("title")
+    @classmethod
+    def _title(cls, v: Optional[str]) -> Optional[str]:
+        return _clean_title(v)
+
+
+class OccurrenceEdit(BaseModel):
+    cancel: bool = False
+    start_at: Optional[datetime] = None
+    end_at: Optional[datetime] = None
+    title: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    location: Optional[str] = Field(default=None, max_length=200)
+    notes: Optional[str] = None
+
+    @field_validator("title")
+    @classmethod
+    def _title(cls, v: Optional[str]) -> Optional[str]:
+        return _clean_title(v)
+
+
+class EventRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    title: str
+    location: Optional[str]
+    notes: Optional[str]
+    category: str
+    all_day: bool
+    start_at: datetime
+    end_at: datetime
+    rrule: Optional[str]
+    exdates: List[date]
+    source: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class Occurrence(BaseModel):
+    event_id: str
+    occurrence_date: date  # original series date; the start date for one-offs
+    start_at: datetime
+    end_at: datetime
+    all_day: bool
+    title: str
+    location: Optional[str]
+    category: str
+    notes: Optional[str]
+    recurring: bool
+    rrule: Optional[str]
+    overridden: bool = False
+    cancelled: bool = False
+
+
+class EventWithContext(BaseModel):
+    event: EventRead
+    next_occurrences: List[Occurrence]
+    conflicts: List[Occurrence]
+    dropped_overrides: List[date] = Field(default_factory=list)
+
+
+class ScheduleResponse(BaseModel):
+    start_date: date
+    end_date: date
+    occurrences: List[Occurrence]
+    count: int
+
+
+class EventList(BaseModel):
+    events: List[EventRead]
+    count: int
