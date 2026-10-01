@@ -7,6 +7,7 @@ import {
   CalendarDotsIcon,
   CheckCircleIcon,
   CheckIcon,
+  ForkKnifeIcon,
   GearSixIcon,
   ListChecksIcon,
   ListIcon,
@@ -31,6 +32,7 @@ const NAV: { href: string; label: string; icon: Icon; count?: keyof NavCounts }[
   { href: "/tasks", label: "All Tasks", icon: ListChecksIcon },
   { href: "/upcoming", label: "Upcoming", icon: SunHorizonIcon },
   { href: "/calendar", label: "Calendar", icon: CalendarDotsIcon },
+  { href: "/nutrition", label: "Nutrition", icon: ForkKnifeIcon },
   { href: "/completed", label: "Completed", icon: CheckCircleIcon },
 ];
 
