@@ -132,7 +132,7 @@ export default function QuickAddBar({ onCreated }: { onCreated?: (task: Task) =>
           ) : (
             <span className="inline-flex items-center gap-1.5 text-xs text-fg-faint">
               <TrayIcon className="h-3.5 w-3.5" aria-hidden />
-              Goes to Inbox. Add a date like &ldquo;tomorrow&rdquo; or &ldquo;Sept 18&rdquo; to schedule it.
+              Goes to Inbox. Add a date like &ldquo;tmrw&rdquo; or &ldquo;Sept 18&rdquo; to schedule it.
             </span>
           )}
         </div>

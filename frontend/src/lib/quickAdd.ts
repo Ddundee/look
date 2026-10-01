@@ -94,7 +94,7 @@ export function parseQuickAdd(raw: string): ParsedQuickAdd {
     remaining = remaining.replace(priorityMatch[0], " ");
   }
 
-  // Due date: "due <...>", "by <...>", bare weekday/today/tomorrow, or explicit date
+  // Due date: "due <...>", "by <...>", bare weekday/today/tomorrow (or "tmrw"), or explicit date
   const dueClause = remaining.match(/\b(?:due|by)\s+([a-z0-9,./\s]+?)(?=$|,|\bhigh\b|\bmedium\b|\blow\b|\bcritical\b)/i);
   const dateSource = dueClause ? dueClause[1] : remaining;
 
@@ -104,9 +104,9 @@ export function parseQuickAdd(raw: string): ParsedQuickAdd {
   if (/\btoday\b/i.test(dateSource)) {
     isoDate = todayIso();
     dateFragmentToStrip = dueClause ? dueClause[0] : (dateSource.match(/\btoday\b/i)?.[0] ?? null);
-  } else if (/\btomorrow\b/i.test(dateSource)) {
+  } else if (/\b(?:tomorrow|tmrw)\b/i.test(dateSource)) {
     isoDate = addDaysIso(todayIso(), 1);
-    dateFragmentToStrip = dueClause ? dueClause[0] : (dateSource.match(/\btomorrow\b/i)?.[0] ?? null);
+    dateFragmentToStrip = dueClause ? dueClause[0] : (dateSource.match(/\b(?:tomorrow|tmrw)\b/i)?.[0] ?? null);
   } else {
     const weekdayMatch = dateSource.match(
       /\b(sunday|sun|monday|mon|tuesday|tue|tues|wednesday|wed|thursday|thu|thur|thurs|friday|fri|saturday|sat)\b/i
