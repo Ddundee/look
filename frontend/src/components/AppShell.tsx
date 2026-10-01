@@ -222,8 +222,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           </header>
 
-          <main id="main" tabIndex={-1} className="scroll-area min-h-0 flex-1 overflow-y-auto focus:outline-none">
-            <div className="mx-auto w-full max-w-3xl px-4 pb-24 pt-8 sm:px-8 sm:pt-10">{children}</div>
+          <main
+            id="main"
+            tabIndex={-1}
+            className="scroll-area min-h-0 flex-1 overflow-y-auto px-4 [scrollbar-gutter:stable_both-edges] focus:outline-none sm:px-8"
+          >
+            <div className="mx-auto w-full max-w-3xl pb-24 pt-8 sm:pt-10">{children}</div>
           </main>
         </div>
       </div>

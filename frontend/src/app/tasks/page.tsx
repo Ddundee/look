@@ -55,7 +55,9 @@ export default function AllTasksPage() {
       <PageHeader
         title="All Tasks"
         subtitle={
-          loading ? undefined : (
+          loading ? (
+            <span className="shimmer inline-block h-4 w-28 rounded align-middle" />
+          ) : (
             <>
               <span className="font-mono tabular-nums">{openCount}</span> open,{" "}
               <span className="font-mono tabular-nums">{tasks.length - openCount}</span> done

@@ -98,9 +98,9 @@ export const STATUS_STYLES: Record<TaskStatus, string> = {
 // always written out beside it so color is never the only signal.
 const CATEGORY_HUES: Record<string, string> = {
   LeetCode: "text-amber-500",
-  school: "text-sky-500",
+  school: "text-rose-500",
   project: "text-violet-500",
-  personal: "text-teal-500",
+  personal: "text-emerald-500",
   errands: "text-lime-600 dark:text-lime-500",
 };
 
