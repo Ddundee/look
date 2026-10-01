@@ -61,7 +61,7 @@ export default function WeekChart({
                     d.entry_count === 0
                       ? "bg-line-strong"
                       : over
-                        ? "bg-sand group-hover:brightness-110"
+                        ? "bg-warn group-hover:brightness-110"
                         : "bg-accent group-hover:bg-accent-hover"
                   } ${isSelected ? "ring-2 ring-fg/70 ring-offset-2 ring-offset-surface" : ""}`}
                   style={{ height: d.entry_count ? `${Math.max(2, (cal / peak) * 100)}%` : "2px" }}

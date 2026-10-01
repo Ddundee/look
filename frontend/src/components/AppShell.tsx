@@ -20,10 +20,8 @@ import {
   type Icon,
 } from "@phosphor-icons/react";
 import { api } from "@/lib/api";
-import { notifyTasksChanged } from "@/lib/events";
 import { useNavCounts, type NavCounts } from "@/lib/useNavCounts";
 import { ICON_BUTTON } from "@/lib/ui";
-import QuickAddBar from "./QuickAddBar";
 import ThemeToggle from "./ThemeToggle";
 import Toaster from "./Toaster";
 
@@ -144,6 +142,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const isLogin = pathname === "/login";
+  // The dashboard is a one-screen bento grid: wider, full height, and on
+  // tablet/desktop the page itself doesn't scroll.
+  const isDashboard = pathname?.startsWith("/dashboard") ?? false;
   const counts = useNavCounts(!isLogin);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -220,18 +221,22 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <span className="text-sm font-semibold text-fg">{currentLabel}</span>
           </div>
 
-          <header className="shrink-0 border-b border-line px-4 py-3 sm:px-8">
-            <div className="mx-auto w-full max-w-3xl">
-              <QuickAddBar onCreated={() => notifyTasksChanged()} />
-            </div>
-          </header>
-
           <main
             id="main"
             tabIndex={-1}
-            className="scroll-area min-h-0 flex-1 overflow-y-auto px-4 [scrollbar-gutter:stable_both-edges] focus:outline-none sm:px-8"
+            className={`scroll-area min-h-0 flex-1 overflow-y-auto focus:outline-none ${
+              isDashboard ? "px-4 sm:px-6" : "px-4 [scrollbar-gutter:stable_both-edges] sm:px-8"
+            }`}
           >
-            <div className="mx-auto w-full max-w-3xl pb-24 pt-8 sm:pt-10">{children}</div>
+            <div
+              className={
+                isDashboard
+                  ? "mx-auto h-full w-full max-w-7xl py-4 sm:py-6"
+                  : "mx-auto w-full max-w-3xl pb-24 pt-8 sm:pt-10"
+              }
+            >
+              {children}
+            </div>
           </main>
         </div>
       </div>

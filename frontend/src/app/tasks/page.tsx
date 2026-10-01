@@ -161,7 +161,7 @@ export default function AllTasksPage() {
               </button>
             }
           >
-            Create your first task, or type one into the bar above.
+            Create your first task here, or add one from the Dashboard.
           </EmptyState>
         ))
       ) : (

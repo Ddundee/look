@@ -5,7 +5,7 @@ import { CheckCircleIcon, InfoIcon, WarningCircleIcon, XIcon } from "@phosphor-i
 import { dismissToast, getServerToasts, getToasts, subscribeToasts } from "@/lib/toast";
 
 const ICONS = {
-  success: <CheckCircleIcon weight="fill" className="h-4 w-4 shrink-0 text-sea" aria-hidden />,
+  success: <CheckCircleIcon weight="fill" className="h-4 w-4 shrink-0 text-accent" aria-hidden />,
   error: <WarningCircleIcon weight="fill" className="h-4 w-4 shrink-0 text-danger" aria-hidden />,
   info: <InfoIcon weight="fill" className="h-4 w-4 shrink-0 text-fg-faint" aria-hidden />,
 };

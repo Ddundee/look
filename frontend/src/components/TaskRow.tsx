@@ -106,7 +106,7 @@ export default function TaskRow({ task, onUpdated, onDeleted, index = 0 }: Props
         aria-label={isDone ? `Mark "${task.title}" as not done` : `Mark "${task.title}" as done`}
         aria-pressed={isDone}
         className={`relative mt-px flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 before:absolute before:-inset-2.5 before:content-[''] ${
-          isDone ? "border-sea bg-sea text-surface" : PRIORITY_RING[task.priority]
+          isDone ? "border-accent bg-accent text-accent-fg" : PRIORITY_RING[task.priority]
         }`}
       >
         {isDone && <CheckIcon weight="bold" className="anim-check h-2.5 w-2.5" aria-hidden />}

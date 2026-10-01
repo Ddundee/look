@@ -97,7 +97,7 @@ export const STATUS_STYLES: Record<TaskStatus, string> = {
 // Categories are told apart by a small colored hash glyph, with the name
 // always written out beside it so color is never the only signal.
 const CATEGORY_HUES: Record<string, string> = {
-  LeetCode: "text-orange-600 dark:text-orange-400",
+  LeetCode: "text-amber-500",
   school: "text-rose-500",
   project: "text-violet-500",
   personal: "text-emerald-500",
