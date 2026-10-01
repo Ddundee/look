@@ -25,14 +25,24 @@ from datetime import date, time, timedelta
 from typing import List, Optional
 
 from mcp.server.mcpserver import MCPServer
+from pydantic import ValidationError
 from sqlmodel import Session
 
 from app import db
 from app.config import get_settings
 from app.logging_config import configure_logging
 from app.models.enums import RecurrencePattern, TaskPriority, TaskStatus
-from app.schemas import RecurringTaskCreate, TaskCreate, TaskUpdate
+from app.schemas import (
+    FoodEntryCreate,
+    FoodEntryRead,
+    FoodEntryUpdate,
+    NutritionTargetsSet,
+    RecurringTaskCreate,
+    TaskCreate,
+    TaskUpdate,
+)
 from app.security import constant_time_equals
+from app.services import nutrition as nutrition_service
 from app.services import recurrence as recurrence_service
 from app.services import tasks as tasks_service
 from app.services.priority import rank_tasks
@@ -47,8 +57,11 @@ mcp = MCPServer(
     instructions=(
         "Tools for managing the user's personal tasks: LeetCode/DSA "
         "practice, school assignments, projects, errands, and recurring "
-        "daily goals. Dates are ISO 'YYYY-MM-DD', times are 'HH:MM' "
-        "24-hour."
+        "daily goals. Also a food log: when the user says what they ate, "
+        "estimate calories and macros yourself and record them with "
+        "log_food, then tell them their totals and what's left from the "
+        "returned day summary. Dates are ISO 'YYYY-MM-DD', times are "
+        "'HH:MM' 24-hour."
     ),
 )
 
@@ -418,6 +431,213 @@ def carry_unfinished_tasks_forward(
 
 
 # ---------------------------------------------------------------------------
+# Food log and nutrition targets
+# ---------------------------------------------------------------------------
+
+
+def _error(exc: Exception, prefix: str = "") -> dict:
+    if isinstance(exc, ValidationError):
+        parts = []
+        for err in exc.errors():
+            loc = ".".join(str(p) for p in err["loc"])
+            parts.append(f"{loc}: {err['msg']}" if loc else err["msg"])
+        message = "; ".join(parts)
+    else:
+        message = str(exc)
+    return {"error": f"{prefix}{message}"}
+
+
+def _food_not_found(entry_id: str) -> dict:
+    return {"error": f"No food entry with id '{entry_id}'"}
+
+
+def _entry_dict(entry) -> dict:
+    return FoodEntryRead.model_validate(entry).model_dump(mode="json")
+
+
+def _day_dict(session: Session, day: Optional[date] = None) -> dict:
+    return nutrition_service.day_summary(session, day).model_dump(mode="json")
+
+
+def _parse_day(value: Optional[str], field: str) -> Optional[date]:
+    if value is None:
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        raise ValueError(f"{field} must be an ISO date like 2026-10-01, got {value!r}.")
+
+
+@mcp.tool()
+def log_food(items: List[FoodEntryCreate]) -> dict:
+    """Log what the user ate. Split a meal into one item per food
+    ("2 eggs and toast" is two items). You supply the nutrition: estimate
+    calories, protein_g, carbs_g and fat_g yourself, searching the web for
+    restaurant or branded items, and put the basis of the estimate in
+    `notes`. If the user refers to something they've had before ("my usual
+    shake"), call search_food_entries first and reuse those numbers.
+    `meal` is breakfast, lunch, dinner or snack. `eaten_on` defaults to
+    today. If any item is invalid nothing is logged. Returns the new
+    entries plus the day's totals, targets and what's left: use that to
+    tell the user where they stand."""
+    parsed: List[FoodEntryCreate] = []
+    for index, item in enumerate(items):
+        try:
+            parsed.append(
+                item if isinstance(item, FoodEntryCreate) else FoodEntryCreate.model_validate(item)
+            )
+        except ValidationError as exc:
+            return _error(exc, prefix=f"items[{index}] ")
+    with _session() as session:
+        try:
+            entries = nutrition_service.log_entries(session, parsed, source="mcp")
+        except ValueError as exc:
+            return _error(exc)
+        dates = sorted({e.eaten_on for e in entries})
+        return {
+            "entries": [_entry_dict(e) for e in entries],
+            "dates": [d.isoformat() for d in dates],
+            "day": _day_dict(session, entries[0].eaten_on),
+        }
+
+
+@mcp.tool()
+def update_food_entry(
+    entry_id: str,
+    name: Optional[str] = None,
+    calories: Optional[float] = None,
+    quantity: Optional[str] = None,
+    protein_g: Optional[float] = None,
+    carbs_g: Optional[float] = None,
+    fat_g: Optional[float] = None,
+    meal: Optional[str] = None,
+    eaten_on: Optional[str] = None,
+    eaten_at: Optional[str] = None,
+    notes: Optional[str] = None,
+) -> dict:
+    """Correct a logged food (e.g. "it was 2 eggs, not 3"). Pass only the
+    fields to change. Returns the entry and that day's updated summary."""
+    changes = {
+        k: v
+        for k, v in {
+            "name": name,
+            "calories": calories,
+            "quantity": quantity,
+            "protein_g": protein_g,
+            "carbs_g": carbs_g,
+            "fat_g": fat_g,
+            "meal": meal,
+            "eaten_on": eaten_on,
+            "eaten_at": eaten_at,
+            "notes": notes,
+        }.items()
+        if v is not None
+    }
+    try:
+        payload = FoodEntryUpdate.model_validate(changes)
+    except ValidationError as exc:
+        return _error(exc)
+    with _session() as session:
+        entry = nutrition_service.get_entry(session, entry_id)
+        if entry is None:
+            return _food_not_found(entry_id)
+        try:
+            entry = nutrition_service.update_entry(session, entry, payload)
+        except ValueError as exc:
+            return _error(exc)
+        return {"entry": _entry_dict(entry), "day": _day_dict(session, entry.eaten_on)}
+
+
+@mcp.tool()
+def delete_food_entry(entry_id: str) -> dict:
+    """Permanently delete a logged food. Only do this when the user asks.
+    Returns that day's updated summary."""
+    with _session() as session:
+        entry = nutrition_service.get_entry(session, entry_id)
+        if entry is None:
+            return _food_not_found(entry_id)
+        day = entry.eaten_on
+        nutrition_service.delete_entry(session, entry)
+        return {"deleted_id": entry_id, "day": _day_dict(session, day)}
+
+
+@mcp.tool()
+def get_nutrition_day(day: Optional[str] = None) -> dict:
+    """Everything eaten on one day (default today) in meal order, with
+    totals, the targets in effect, what's left, and which macros are over."""
+    try:
+        parsed = _parse_day(day, "day")
+    except ValueError as exc:
+        return _error(exc)
+    with _session() as session:
+        return _day_dict(session, parsed)
+
+
+@mcp.tool()
+def get_nutrition_history(start_date: str, end_date: Optional[str] = None) -> dict:
+    """Per-day totals vs targets for a date range (end defaults to today),
+    plus averages over the days that have entries. Up to 366 days per call;
+    make several calls for longer spans. The full history is kept forever."""
+    try:
+        start = _parse_day(start_date, "start_date")
+        end = _parse_day(end_date, "end_date")
+        with _session() as session:
+            return nutrition_service.history(session, start, end).model_dump(mode="json")
+    except ValueError as exc:
+        return _error(exc)
+
+
+@mcp.tool()
+def search_food_entries(query: str, limit: int = 20) -> dict:
+    """Find past food entries by name (case-insensitive), newest first.
+    Use this to reuse earlier numbers for foods the user eats often."""
+    with _session() as session:
+        entries = [_entry_dict(e) for e in nutrition_service.search_entries(session, query, limit)]
+        return {"entries": entries, "count": len(entries)}
+
+
+@mcp.tool()
+def get_nutrition_targets(day: Optional[str] = None) -> dict:
+    """The daily calorie and macro targets in effect on a day (default
+    today) and the full history of target changes, newest first."""
+    try:
+        parsed = _parse_day(day, "day")
+    except ValueError as exc:
+        return _error(exc)
+    with _session() as session:
+        return nutrition_service.targets_response(session, parsed).model_dump(mode="json")
+
+
+@mcp.tool()
+def set_nutrition_targets(
+    calories: float,
+    protein_g: Optional[float] = None,
+    carbs_g: Optional[float] = None,
+    fat_g: Optional[float] = None,
+    effective_from: Optional[str] = None,
+) -> dict:
+    """Set daily targets. They apply from `effective_from` (default today)
+    onward; earlier days keep the targets they had. A macro left out has
+    no target. Returns the targets and today's summary against them."""
+    try:
+        payload = NutritionTargetsSet(
+            calories=calories,
+            protein_g=protein_g,
+            carbs_g=carbs_g,
+            fat_g=fat_g,
+            effective_from=_parse_day(effective_from, "effective_from"),
+        )
+    except ValueError as exc:  # ValidationError is a ValueError
+        return _error(exc)
+    with _session() as session:
+        nutrition_service.set_targets(session, payload)
+        return {
+            "targets": nutrition_service.targets_response(session).model_dump(mode="json"),
+            "today": _day_dict(session),
+        }
+
+
+# ---------------------------------------------------------------------------
 # Resources (read-only)
 # ---------------------------------------------------------------------------
 
@@ -438,6 +658,12 @@ def resource_overdue() -> List[dict]:
 def resource_upcoming() -> List[dict]:
     """Tasks due in the next 7 days."""
     return get_upcoming_tasks()
+
+
+@mcp.resource("nutrition://today")
+def resource_nutrition_today() -> dict:
+    """Today's food log, totals and targets."""
+    return get_nutrition_day()
 
 
 # ---------------------------------------------------------------------------

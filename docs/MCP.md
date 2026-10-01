@@ -149,6 +149,25 @@ the header.
 | `remove_task_from_today` | Remove from today's plan |
 | `carry_unfinished_tasks_forward` | Move unfinished planned tasks to another date, optionally filtered by priority |
 
+### Food and nutrition
+
+The client estimates calories and macros itself (the app never looks
+nutrition up) and records them here. Every tool that changes something
+returns that day's totals, targets and what's left. Deletes are real and
+only happen when asked; nothing is ever removed automatically, so the full
+history stays readable.
+
+| Tool | Description |
+|---|---|
+| `log_food` | Log one or more foods in one call (`items`: name, calories, optional quantity, protein_g, carbs_g, fat_g, meal, eaten_on, eaten_at, notes). Rejects the whole batch if any item is invalid |
+| `update_food_entry` | Correct an entry; pass only the fields to change |
+| `delete_food_entry` | Permanently delete an entry |
+| `get_nutrition_day` | One day's entries in meal order, totals, targets, what's left, macros over target |
+| `get_nutrition_history` | Per-day totals vs targets for a range (max 366 days per call) plus averages over logged days |
+| `search_food_entries` | Find past entries by name to reuse their numbers |
+| `get_nutrition_targets` | Targets in effect on a day plus the full history of target changes |
+| `set_nutrition_targets` | Set daily targets from a date (default today); earlier days keep their old targets |
+
 ## Resources (read-only)
 
 | URI | Contents |
@@ -156,6 +175,7 @@ the header.
 | `tasks://today` | Same payload as `get_today` |
 | `tasks://overdue` | Same payload as `get_overdue_tasks` |
 | `tasks://upcoming` | Same payload as `get_upcoming_tasks` |
+| `nutrition://today` | Same payload as `get_nutrition_day` |
 
 ## Example prompts once connected
 
@@ -165,3 +185,5 @@ the header.
 - "What should I prioritize tonight?"
 - "Move my unfinished low-priority tasks to tomorrow."
 - "What did I accomplish this week?"
+- "I had 2 eggs and a slice of toast for breakfast."
+- "How am I doing on protein this week?"
