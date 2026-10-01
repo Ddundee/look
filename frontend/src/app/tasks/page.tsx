@@ -1,21 +1,20 @@
 "use client";
 
 import { useState } from "react";
+import { FunnelSimpleIcon, MagnifyingGlassIcon, PlusIcon, XIcon } from "@phosphor-icons/react";
 import { api } from "@/lib/api";
+import { notifyTasksChanged } from "@/lib/events";
+import { PRIORITY_LABEL, STATUS_LABEL } from "@/lib/format";
 import { useTaskListState } from "@/lib/useTasks";
-import {
-  isTaskDone,
-  SEED_CATEGORIES,
-  type Task,
-  type TaskPriority,
-  type TaskStatus,
-} from "@/lib/types";
-import { BUTTON_PRIMARY, CARD_LIST, FAINT, FIELD } from "@/lib/ui";
-import TaskRow from "@/components/TaskRow";
+import { isTaskDone, SEED_CATEGORIES, type TaskPriority, type TaskStatus } from "@/lib/types";
+import { BUTTON_GHOST_SM, BUTTON_PRIMARY, FIELD } from "@/lib/ui";
+import { EmptyState, ErrorState, PageHeader, TaskList, TaskListSkeleton } from "@/components/PageParts";
 import TaskEditModal from "@/components/TaskEditModal";
 
 const STATUSES: TaskStatus[] = ["inbox", "todo", "in_progress", "blocked", "completed", "cancelled"];
 const PRIORITIES: TaskPriority[] = ["critical", "high", "medium", "low"];
+
+const SELECT = `h-9 pr-8 ${FIELD}`;
 
 export default function AllTasksPage() {
   const [status, setStatus] = useState<string>("");
@@ -23,9 +22,8 @@ export default function AllTasksPage() {
   const [priority, setPriority] = useState<string>("");
   const [search, setSearch] = useState("");
   const [creating, setCreating] = useState(false);
-  const [editing, setEditing] = useState<Task | null>(null);
 
-  const { tasks, handleUpdated, handleDeleted, loading } = useTaskListState(
+  const { tasks, handleUpdated, handleDeleted, loading, error } = useTaskListState(
     () =>
       api
         .listTasks({
@@ -42,87 +40,134 @@ export default function AllTasksPage() {
   // Array.sort is stable, so this only moves done tasks after not-done ones
   // without disturbing whatever order the API returned within each group.
   const sortedTasks = [...tasks].sort((a, b) => Number(isTaskDone(a)) - Number(isTaskDone(b)));
+  const filtered = !!(status || category || priority || search);
+  const openCount = tasks.filter((t) => !isTaskDone(t)).length;
+
+  function clearFilters() {
+    setStatus("");
+    setCategory("");
+    setPriority("");
+    setSearch("");
+  }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">All Tasks</h1>
-        <button onClick={() => setCreating(true)} className={BUTTON_PRIMARY}>
-          + New task
-        </button>
-      </div>
+    <div>
+      <PageHeader
+        title="All Tasks"
+        subtitle={
+          loading ? undefined : (
+            <>
+              <span className="font-mono tabular-nums">{openCount}</span> open,{" "}
+              <span className="font-mono tabular-nums">{tasks.length - openCount}</span> done
+              {filtered && " in this view"}
+            </>
+          )
+        }
+        actions={
+          <button onClick={() => setCreating(true)} className={BUTTON_PRIMARY}>
+            <PlusIcon weight="bold" className="h-4 w-4" aria-hidden />
+            New task
+          </button>
+        }
+      />
 
-      <div className="flex flex-wrap gap-2">
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search title, description, notes…"
-          className={`min-w-[200px] flex-1 py-1.5 ${FIELD}`}
-        />
-        <select
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          className={`py-1.5 ${FIELD}`}
-        >
-          <option value="">All statuses</option>
+      <div className="mb-5 flex flex-wrap items-center gap-2">
+        <div className="relative min-w-[220px] flex-1">
+          <MagnifyingGlassIcon
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-faint"
+            aria-hidden
+          />
+          <label htmlFor="task-search" className="sr-only">
+            Search tasks
+          </label>
+          <input
+            id="task-search"
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search title, description, notes"
+            className={`h-9 w-full pl-9 ${FIELD}`}
+          />
+        </div>
+        <FunnelSimpleIcon className="ml-1 hidden h-4 w-4 text-fg-faint sm:block" aria-hidden />
+        <select aria-label="Filter by status" value={status} onChange={(e) => setStatus(e.target.value)} className={SELECT}>
+          <option value="">Any status</option>
           {STATUSES.map((s) => (
             <option key={s} value={s}>
-              {s.replace("_", " ")}
+              {STATUS_LABEL[s]}
             </option>
           ))}
         </select>
         <select
+          aria-label="Filter by priority"
           value={priority}
           onChange={(e) => setPriority(e.target.value)}
-          className={`py-1.5 ${FIELD}`}
+          className={SELECT}
         >
-          <option value="">All priorities</option>
+          <option value="">Any priority</option>
           {PRIORITIES.map((p) => (
             <option key={p} value={p}>
-              {p}
+              {PRIORITY_LABEL[p]}
             </option>
           ))}
         </select>
         <select
+          aria-label="Filter by category"
           value={category}
           onChange={(e) => setCategory(e.target.value)}
-          className={`py-1.5 ${FIELD}`}
+          className={SELECT}
         >
-          <option value="">All categories</option>
+          <option value="">Any category</option>
           {SEED_CATEGORIES.map((c) => (
             <option key={c} value={c}>
               {c}
             </option>
           ))}
         </select>
+        {filtered && (
+          <button onClick={clearFilters} className={`h-9 ${BUTTON_GHOST_SM}`}>
+            <XIcon className="h-3.5 w-3.5" aria-hidden />
+            Clear
+          </button>
+        )}
       </div>
 
-      {loading && <p className={`text-sm ${FAINT}`}>Loading…</p>}
-      {!loading && tasks.length === 0 && (
-        <p className={`text-sm ${FAINT}`}>No tasks match these filters.</p>
+      {error && <ErrorState message={error} onRetry={notifyTasksChanged} />}
+      {loading ? (
+        <TaskListSkeleton rows={6} />
+      ) : tasks.length === 0 ? (
+        !error &&
+        (filtered ? (
+          <EmptyState
+            icon={MagnifyingGlassIcon}
+            title="No matches"
+            action={
+              <button onClick={clearFilters} className={BUTTON_GHOST_SM}>
+                Clear filters
+              </button>
+            }
+          >
+            Nothing fits these filters.
+          </EmptyState>
+        ) : (
+          <EmptyState
+            icon={PlusIcon}
+            title="No tasks yet"
+            action={
+              <button onClick={() => setCreating(true)} className={BUTTON_PRIMARY}>
+                New task
+              </button>
+            }
+          >
+            Create your first task, or type one into the bar above.
+          </EmptyState>
+        ))
+      ) : (
+        <TaskList tasks={sortedTasks} onUpdated={handleUpdated} onDeleted={handleDeleted} />
       )}
-
-      <ul className={CARD_LIST}>
-        {sortedTasks.map((t) => (
-          <TaskRow
-            key={t.id}
-            task={t}
-            onUpdated={handleUpdated}
-            onDeleted={handleDeleted}
-            onEdit={setEditing}
-          />
-        ))}
-      </ul>
 
       {creating && (
-        <TaskEditModal
-          task={null}
-          onClose={() => setCreating(false)}
-          onSaved={() => setCreating(false)}
-        />
-      )}
-      {editing && (
-        <TaskEditModal task={editing} onClose={() => setEditing(null)} onSaved={handleUpdated} />
+        <TaskEditModal task={null} onClose={() => setCreating(false)} onSaved={() => setCreating(false)} />
       )}
     </div>
   );

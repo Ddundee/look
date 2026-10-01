@@ -1,48 +1,34 @@
 "use client";
 
-import { useState } from "react";
+import { TrayIcon } from "@phosphor-icons/react";
 import { api } from "@/lib/api";
+import { notifyTasksChanged } from "@/lib/events";
 import { useTaskListState } from "@/lib/useTasks";
-import type { Task } from "@/lib/types";
-import { CARD_LIST, FAINT, MUTED } from "@/lib/ui";
-import TaskRow from "@/components/TaskRow";
-import TaskEditModal from "@/components/TaskEditModal";
+import { EmptyState, ErrorState, PageHeader, TaskList, TaskListSkeleton } from "@/components/PageParts";
 
 export default function InboxPage() {
-  const { tasks, loading, handleUpdated, handleDeleted } = useTaskListState(() =>
+  const { tasks, loading, error, handleUpdated, handleDeleted } = useTaskListState(() =>
     api.listTasks({ status: "inbox" }).then((r) => r.tasks)
   );
-  const [editing, setEditing] = useState<Task | null>(null);
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-xl font-semibold">Inbox</h1>
-        <p className={`text-sm ${MUTED}`}>
-          Captured but not yet organized. Click Edit to give it a category, priority, or due
-          date.
-        </p>
-      </div>
+    <div>
+      <PageHeader
+        title="Inbox"
+        subtitle="Captured, not yet organized. Click a task to give it a date, priority, or category."
+      />
 
-      {loading && <p className={`text-sm ${FAINT}`}>Loading…</p>}
-      {!loading && tasks.length === 0 && (
-        <p className={`text-sm ${FAINT}`}>Inbox is empty. Nice.</p>
-      )}
-
-      <ul className={CARD_LIST}>
-        {tasks.map((t) => (
-          <TaskRow
-            key={t.id}
-            task={t}
-            onUpdated={handleUpdated}
-            onDeleted={handleDeleted}
-            onEdit={setEditing}
-          />
-        ))}
-      </ul>
-
-      {editing && (
-        <TaskEditModal task={editing} onClose={() => setEditing(null)} onSaved={handleUpdated} />
+      {error && <ErrorState message={error} onRetry={notifyTasksChanged} />}
+      {loading ? (
+        <TaskListSkeleton />
+      ) : tasks.length === 0 ? (
+        !error && (
+          <EmptyState icon={TrayIcon} title="Inbox zero">
+            Anything you add without a date lands here until you sort it.
+          </EmptyState>
+        )
+      ) : (
+        <TaskList tasks={tasks} onUpdated={handleUpdated} onDeleted={handleDeleted} />
       )}
     </div>
   );

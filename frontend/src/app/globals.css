@@ -6,10 +6,195 @@
    default. */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Semantic color tokens. Components use these (bg-surface, text-fg-muted,
+   border-line, bg-accent...) instead of raw palette classes, so light and
+   dark are defined once here rather than as a `dark:` pair on every
+   element. `inline` makes each utility reference the CSS variable
+   directly, so swapping the variables under `.dark` re-themes everything. */
+@theme inline {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
+
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-faint: var(--fg-faint);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-text: var(--accent-text);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+}
+
 :root {
   color-scheme: light;
+  --canvas: oklch(0.968 0.003 247);
+  --surface: oklch(0.995 0.001 247);
+  --surface-2: oklch(0.955 0.004 247);
+  --line: oklch(0.912 0.005 247);
+  --line-strong: oklch(0.86 0.007 247);
+  --fg: oklch(0.21 0.008 260);
+  --fg-muted: oklch(0.47 0.012 260);
+  --fg-faint: oklch(0.56 0.012 260);
+  --accent: oklch(0.51 0.09 183);
+  --accent-hover: oklch(0.45 0.085 183);
+  --accent-fg: oklch(0.99 0.005 183);
+  --accent-soft: oklch(0.51 0.09 183 / 0.1);
+  --accent-text: oklch(0.47 0.09 183);
+  --danger: oklch(0.55 0.2 27);
+  --danger-soft: oklch(0.55 0.2 27 / 0.09);
+  --warn: oklch(0.58 0.14 62);
+  --warn-soft: oklch(0.7 0.15 70 / 0.13);
+  --shadow-tint: 220 20% 20%;
 }
 
 :root.dark {
   color-scheme: dark;
+  --canvas: oklch(0.155 0.004 260);
+  --surface: oklch(0.19 0.005 260);
+  --surface-2: oklch(0.225 0.006 260);
+  --line: oklch(0.265 0.007 260);
+  --line-strong: oklch(0.33 0.008 260);
+  --fg: oklch(0.94 0.004 260);
+  --fg-muted: oklch(0.74 0.008 260);
+  --fg-faint: oklch(0.64 0.01 260);
+  --accent: oklch(0.78 0.11 180);
+  --accent-hover: oklch(0.84 0.1 180);
+  --accent-fg: oklch(0.2 0.03 185);
+  --accent-soft: oklch(0.78 0.11 180 / 0.12);
+  --accent-text: oklch(0.8 0.1 180);
+  --danger: oklch(0.7 0.17 25);
+  --danger-soft: oklch(0.7 0.17 25 / 0.12);
+  --warn: oklch(0.8 0.13 75);
+  --warn-soft: oklch(0.8 0.13 75 / 0.12);
+  --shadow-tint: 0 0% 0%;
+}
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    font-feature-settings: "cv11", "ss01";
+  }
+  ::selection {
+    background: var(--accent-soft);
+  }
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  select,
+  summary {
+    cursor: pointer;
+  }
+  button,
+  a {
+    touch-action: manipulation;
+  }
+  input[type="date"]::-webkit-calendar-picker-indicator,
+  input[type="time"]::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.55;
+  }
+  .dark input[type="date"]::-webkit-calendar-picker-indicator,
+  .dark input[type="time"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+  }
+}
+
+/* Thin, theme-aware scrollbars for the scrolling content pane. */
+.scroll-area {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+/* Elevation scale, tinted to the theme rather than pure black. */
+@utility elev-1 {
+  box-shadow: 0 1px 2px hsl(var(--shadow-tint) / 0.06), 0 0 0 1px var(--line);
+}
+@utility elev-3 {
+  box-shadow: 0 0 0 1px var(--line), 0 12px 32px -8px hsl(var(--shadow-tint) / 0.22),
+    0 4px 10px -4px hsl(var(--shadow-tint) / 0.12);
+}
+
+/* Motion tokens. All gated on no-preference so reduced-motion users get
+   instant state changes instead of animation. */
+@media (prefers-reduced-motion: no-preference) {
+  .anim-fade-up {
+    animation: fade-up 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .anim-pop {
+    animation: pop 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .anim-check {
+    animation: check 300ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+  .anim-overlay {
+    animation: fade 180ms ease-out both;
+  }
+  .anim-drawer {
+    animation: drawer 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .anim-stagger > * {
+    animation: fade-up 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation-delay: calc(min(var(--i, 0), 10) * 30ms);
+  }
+  .shimmer {
+    background: linear-gradient(90deg, var(--surface-2) 0%, var(--line) 50%, var(--surface-2) 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s ease-in-out infinite;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .shimmer {
+    background: var(--surface-2);
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+@keyframes check {
+  from {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+}
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes drawer {
+  from {
+    transform: translateX(-100%);
+  }
+}
+@keyframes shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
 }

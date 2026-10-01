@@ -34,6 +34,11 @@ export function formatDateLong(iso: string | null | undefined): string {
   });
 }
 
+export function weekdayLabel(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: "long" });
+}
+
 export function relativeDueLabel(iso: string | null | undefined): string {
   if (!iso) return "";
   const today = todayIso();
@@ -43,55 +48,62 @@ export function relativeDueLabel(iso: string | null | undefined): string {
   return formatDate(iso);
 }
 
-// Soft, low-opacity tinted badges: one token per color reads correctly on
-// both light and dark surfaces without needing separate light/dark
-// background colors, which keeps the palette small and consistent.
-//
-// Classes are spelled out in full below (not built from a `${color}`
-// template) because Tailwind statically scans source text for complete
-// utility names — an interpolated class name never matches anything and
-// silently produces no CSS.
-const NEUTRAL_TINT =
-  "bg-neutral-500/10 text-neutral-600 ring-1 ring-inset ring-neutral-500/20 dark:text-neutral-400";
-const RED_TINT =
-  "bg-red-500/10 text-red-700 ring-1 ring-inset ring-red-500/20 dark:text-red-400";
-const ORANGE_TINT =
-  "bg-orange-500/10 text-orange-700 ring-1 ring-inset ring-orange-500/20 dark:text-orange-400";
-const BLUE_TINT =
-  "bg-blue-500/10 text-blue-700 ring-1 ring-inset ring-blue-500/20 dark:text-blue-400";
-const PURPLE_TINT =
-  "bg-purple-500/10 text-purple-700 ring-1 ring-inset ring-purple-500/20 dark:text-purple-400";
-const YELLOW_TINT =
-  "bg-yellow-500/10 text-yellow-700 ring-1 ring-inset ring-yellow-500/20 dark:text-yellow-400";
-const GREEN_TINT =
-  "bg-green-500/10 text-green-700 ring-1 ring-inset ring-green-500/20 dark:text-green-400";
+export const PRIORITY_LABEL: Record<TaskPriority, string> = {
+  critical: "Critical",
+  high: "High",
+  medium: "Medium",
+  low: "Low",
+};
 
-export const PRIORITY_STYLES: Record<TaskPriority, string> = {
-  critical: RED_TINT,
-  high: ORANGE_TINT,
-  medium: BLUE_TINT,
-  low: NEUTRAL_TINT,
+// Text color for the priority flag shown next to a task.
+// Classes are spelled out in full (not built from a `${color}` template)
+// because Tailwind statically scans source text for complete utility
+// names — an interpolated class name never matches anything and silently
+// produces no CSS.
+export const PRIORITY_TEXT: Record<TaskPriority, string> = {
+  critical: "text-danger",
+  high: "text-warn",
+  medium: "text-accent-text",
+  low: "text-fg-faint",
+};
+
+// Ring color of the completion checkbox, so priority reads at a glance
+// even before the flag label.
+export const PRIORITY_RING: Record<TaskPriority, string> = {
+  critical: "border-danger hover:bg-danger-soft",
+  high: "border-warn hover:bg-warn-soft",
+  medium: "border-line-strong hover:border-accent hover:bg-accent-soft",
+  low: "border-line-strong hover:border-accent hover:bg-accent-soft",
+};
+
+export const STATUS_LABEL: Record<TaskStatus, string> = {
+  inbox: "Inbox",
+  todo: "To do",
+  in_progress: "In progress",
+  blocked: "Blocked",
+  completed: "Completed",
+  cancelled: "Cancelled",
 };
 
 export const STATUS_STYLES: Record<TaskStatus, string> = {
-  inbox: PURPLE_TINT,
-  todo: NEUTRAL_TINT,
-  in_progress: BLUE_TINT,
-  blocked: YELLOW_TINT,
-  completed: GREEN_TINT,
-  cancelled: `${NEUTRAL_TINT} line-through opacity-70`,
+  inbox: "bg-surface-2 text-fg-muted",
+  todo: "bg-surface-2 text-fg-muted",
+  in_progress: "bg-accent-soft text-accent-text",
+  blocked: "bg-warn-soft text-warn",
+  completed: "bg-accent-soft text-accent-text",
+  cancelled: "bg-surface-2 text-fg-faint line-through",
 };
 
-const CATEGORY_STYLES: Record<string, string> = {
-  LeetCode:
-    "bg-amber-500/10 text-amber-700 ring-1 ring-inset ring-amber-500/20 dark:text-amber-400",
-  school: "bg-cyan-500/10 text-cyan-700 ring-1 ring-inset ring-cyan-500/20 dark:text-cyan-400",
-  project:
-    "bg-violet-500/10 text-violet-700 ring-1 ring-inset ring-violet-500/20 dark:text-violet-400",
-  personal: NEUTRAL_TINT,
-  errands: "bg-lime-500/10 text-lime-700 ring-1 ring-inset ring-lime-500/20 dark:text-lime-400",
+// Categories are told apart by a small colored hash glyph, with the name
+// always written out beside it so color is never the only signal.
+const CATEGORY_HUES: Record<string, string> = {
+  LeetCode: "text-amber-500",
+  school: "text-sky-500",
+  project: "text-violet-500",
+  personal: "text-teal-500",
+  errands: "text-lime-600 dark:text-lime-500",
 };
 
-export function categoryColor(category: string): string {
-  return CATEGORY_STYLES[category] || NEUTRAL_TINT;
+export function categoryHue(category: string): string {
+  return CATEGORY_HUES[category] || "text-fg-faint";
 }

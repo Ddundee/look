@@ -1,17 +1,43 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { SunHorizonIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import { api } from "@/lib/api";
-import { onTasksChanged } from "@/lib/events";
-import { relativeDueLabel } from "@/lib/format";
+import { notifyTasksChanged, onTasksChanged } from "@/lib/events";
+import { relativeDueLabel, todayIso, addDaysIso } from "@/lib/format";
 import type { Task } from "@/lib/types";
-import { CARD_LIST, FAINT, SECTION_HEADING } from "@/lib/ui";
-import TaskRow from "@/components/TaskRow";
+import {
+  EmptyState,
+  ErrorState,
+  PageHeader,
+  TaskList,
+  TaskListSkeleton,
+  TaskSection,
+} from "@/components/PageParts";
+
+function DayLabel({ iso }: { iso: string }) {
+  const [y, m, d] = iso.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  const rel = relativeDueLabel(iso);
+  const isNamed = rel === "Today" || rel === "Tomorrow";
+  return (
+    <div className="flex items-baseline gap-2 sm:w-24 sm:shrink-0 sm:flex-col sm:items-start sm:gap-0 sm:pt-2.5">
+      <span className="font-mono text-2xl font-medium leading-none tabular-nums text-fg">{d}</span>
+      <span className="text-[13px] text-fg-muted">
+        {isNamed ? rel : date.toLocaleDateString(undefined, { weekday: "long" })}
+      </span>
+      <span className="text-xs text-fg-faint sm:mt-0.5">
+        {date.toLocaleDateString(undefined, { month: "short" })}
+      </span>
+    </div>
+  );
+}
 
 export default function UpcomingPage() {
   const [overdue, setOverdue] = useState<Task[]>([]);
   const [upcoming, setUpcoming] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     function load() {
@@ -19,7 +45,9 @@ export default function UpcomingPage() {
         .then(([o, u]) => {
           setOverdue(o.tasks);
           setUpcoming(u.tasks);
+          setError(null);
         })
+        .catch((e) => setError(e instanceof Error ? e.message : "Failed to load upcoming tasks"))
         .finally(() => setLoading(false));
     }
     load();
@@ -44,37 +72,53 @@ export default function UpcomingPage() {
   const overdueHandlers = patchIn(setOverdue);
   const upcomingHandlers = patchIn(setUpcoming);
 
+  const today = todayIso();
+
   return (
-    <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Upcoming</h1>
-      {loading && <p className={`text-sm ${FAINT}`}>Loading…</p>}
+    <div>
+      <PageHeader
+        title="Upcoming"
+        subtitle={`Next two weeks, through ${relativeDueLabel(addDaysIso(today, 14))}`}
+      />
 
-      {overdue.length > 0 && (
-        <section>
-          <h2 className="mb-1 px-3 text-sm font-semibold uppercase tracking-wide text-red-600 dark:text-red-400">
-            Overdue ({overdue.length})
-          </h2>
-          <ul className="divide-y divide-neutral-100 rounded-xl border border-red-200 bg-white dark:divide-neutral-800 dark:border-red-900/50 dark:bg-neutral-900">
-            {overdue.map((t) => (
-              <TaskRow key={t.id} task={t} {...overdueHandlers} />
-            ))}
-          </ul>
-        </section>
-      )}
+      {error && <ErrorState message={error} onRetry={notifyTasksChanged} />}
 
-      {sortedKeys.map((key) => (
-        <section key={key}>
-          <h2 className={SECTION_HEADING}>{relativeDueLabel(key)}</h2>
-          <ul className={CARD_LIST}>
-            {groups.get(key)!.map((t) => (
-              <TaskRow key={t.id} task={t} {...upcomingHandlers} />
-            ))}
-          </ul>
-        </section>
-      ))}
+      {loading ? (
+        <TaskListSkeleton rows={5} />
+      ) : overdue.length === 0 && upcoming.length === 0 ? (
+        !error && (
+          <EmptyState icon={SunHorizonIcon} title="Nothing on the horizon">
+            No tasks are due in the next 14 days.
+          </EmptyState>
+        )
+      ) : (
+        <div className="space-y-8">
+          <TaskSection
+            title="Overdue"
+            icon={WarningCircleIcon}
+            iconClassName="text-danger"
+            tone="danger"
+            tasks={overdue}
+            {...overdueHandlers}
+          />
 
-      {!loading && overdue.length === 0 && upcoming.length === 0 && (
-        <p className={`text-sm ${FAINT}`}>Nothing due in the next 14 days.</p>
+          {sortedKeys.length > 0 && (
+            <ol className="space-y-6">
+              {sortedKeys.map((key) => (
+                <li
+                  key={key}
+                  className="anim-fade-up flex flex-col gap-2 sm:flex-row sm:gap-4"
+                  aria-label={relativeDueLabel(key)}
+                >
+                  <DayLabel iso={key} />
+                  <div className="min-w-0 flex-1">
+                    <TaskList tasks={groups.get(key)!} {...upcomingHandlers} />
+                  </div>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
       )}
     </div>
   );

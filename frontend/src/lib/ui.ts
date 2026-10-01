@@ -1,31 +1,44 @@
 // Small set of shared class-name tokens so the same "card", "muted text",
 // etc. look identical across every page without redefining them in each
 // file. Kept as plain literal strings (not a template/generator) so
-// Tailwind's static scanner can see and compile every class used.
+// Tailwind's static scanner can see and compile every class used. Colors
+// come from the semantic tokens in globals.css, so none of these need a
+// separate `dark:` variant.
 
-export const CARD = "rounded-xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900";
+export const CARD = "rounded-xl bg-surface elev-1";
 
-export const CARD_LIST =
-  "divide-y divide-neutral-100 rounded-xl border border-neutral-200 bg-white dark:divide-neutral-800 dark:border-neutral-800 dark:bg-neutral-900";
+export const CARD_LIST = "rounded-xl bg-surface elev-1 p-1";
 
-export const SECTION_HEADING =
-  "mb-1 px-3 text-sm font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400";
+export const SECTION_HEADING = "flex items-center gap-2 px-1 pb-2 text-[13px] font-medium text-fg-muted";
 
-export const MUTED = "text-neutral-500 dark:text-neutral-400";
+export const MUTED = "text-fg-muted";
 
-export const FAINT = "text-neutral-400 dark:text-neutral-500";
+export const FAINT = "text-fg-faint";
 
 // No padding-y baked in — callers add py-1.5 (compact, filters) or py-2
 // (roomier, forms) so two conflicting py-* utilities never land on the
 // same element.
 export const FIELD =
-  "rounded-lg bg-neutral-100 px-3 text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 dark:bg-neutral-800 dark:text-neutral-100 dark:placeholder:text-neutral-500";
+  "rounded-lg border border-line bg-surface px-3 text-sm text-fg placeholder:text-fg-faint transition-[border-color,box-shadow] duration-150 hover:border-line-strong focus:border-accent focus:outline-none focus:ring-3 focus:ring-accent-soft";
+
+export const LABEL = "text-[13px] font-medium text-fg-muted";
 
 export const BUTTON_PRIMARY =
-  "rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-40 dark:bg-indigo-500 dark:hover:bg-indigo-400";
+  "inline-flex items-center justify-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-sm font-medium text-accent-fg transition-[background-color,transform] duration-150 hover:bg-accent-hover active:scale-[0.98] disabled:pointer-events-none disabled:opacity-45";
 
 export const BUTTON_SECONDARY =
-  "rounded-lg px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800";
+  "inline-flex items-center justify-center gap-1.5 rounded-lg border border-line bg-surface px-3.5 py-2 text-sm font-medium text-fg transition-[background-color,border-color,transform] duration-150 hover:border-line-strong hover:bg-surface-2 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-45";
 
 export const BUTTON_GHOST_SM =
-  "rounded-md px-2 py-1 text-xs text-neutral-500 hover:bg-neutral-200/70 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-700 dark:hover:text-neutral-100";
+  "inline-flex items-center justify-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-fg-muted transition-colors duration-150 hover:bg-surface-2 hover:text-fg disabled:opacity-45";
+
+// Square icon-only button. Callers must pass aria-label.
+export const ICON_BUTTON =
+  "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-fg-faint transition-colors duration-150 hover:bg-surface-2 hover:text-fg disabled:opacity-45";
+
+export const KBD =
+  "inline-flex h-5 min-w-5 items-center justify-center rounded border border-line bg-surface-2 px-1 font-mono text-[11px] text-fg-faint";
+
+export const LINK = "font-medium text-accent-text underline decoration-accent/30 underline-offset-2 hover:decoration-accent";
+
+export const INLINE_CODE = "rounded bg-surface-2 px-1 py-0.5 font-mono text-[0.85em] text-fg";
