@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CalendarBlankIcon, CircleNotchIcon, FlagIcon, HashIcon, PlusIcon, TrayIcon } from "@phosphor-icons/react";
+import { CalendarBlankIcon, CircleNotchIcon, FlagIcon, HashIcon, PlusIcon } from "@phosphor-icons/react";
 import { api } from "@/lib/api";
 import { categoryHue, PRIORITY_LABEL, PRIORITY_TEXT, relativeDueLabel } from "@/lib/format";
 import { parseQuickAdd } from "@/lib/quickAdd";
@@ -54,7 +54,7 @@ export default function QuickAddBar({ onCreated }: { onCreated?: (task: Task) =>
       toast(
         payload.due_date
           ? `Added "${task.title}" for ${relativeDueLabel(payload.due_date)}`
-          : `Added "${task.title}" to Inbox`
+          : `Added "${task.title}"`
       );
       onCreated?.(task);
     } catch (err) {
@@ -131,8 +131,8 @@ export default function QuickAddBar({ onCreated }: { onCreated?: (task: Task) =>
             </>
           ) : (
             <span className="inline-flex items-center gap-1.5 text-xs text-fg-faint">
-              <TrayIcon className="h-3.5 w-3.5" aria-hidden />
-              Goes to Inbox. Add a date like &ldquo;tmrw&rdquo; or &ldquo;Sept 18&rdquo; to schedule it.
+              <CalendarBlankIcon className="h-3.5 w-3.5" aria-hidden />
+              No date yet. Add one like &ldquo;tmrw&rdquo; or &ldquo;Sept 18&rdquo; to schedule it.
             </span>
           )}
         </div>

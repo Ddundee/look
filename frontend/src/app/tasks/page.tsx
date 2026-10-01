@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { FunnelSimpleIcon, MagnifyingGlassIcon, PlusIcon, XIcon } from "@phosphor-icons/react";
 import { api } from "@/lib/api";
 import { notifyTasksChanged } from "@/lib/events";
@@ -16,8 +17,14 @@ const PRIORITIES: TaskPriority[] = ["critical", "high", "medium", "low"];
 
 const SELECT = `h-9 pr-8 ${FIELD}`;
 
-export default function AllTasksPage() {
-  const [status, setStatus] = useState<string>("");
+function AllTasksView() {
+  // ?status= pre-selects the status filter (the old /inbox URL redirects to
+  // /tasks?status=inbox). Anything unrecognized is ignored.
+  const params = useSearchParams();
+  const [status, setStatus] = useState<string>(() => {
+    const requested = params.get("status") ?? "";
+    return (STATUSES as string[]).includes(requested) ? requested : "";
+  });
   const [category, setCategory] = useState<string>("");
   const [priority, setPriority] = useState<string>("");
   const [search, setSearch] = useState("");
@@ -172,5 +179,13 @@ export default function AllTasksPage() {
         <TaskEditModal task={null} onClose={() => setCreating(false)} onSaved={() => setCreating(false)} />
       )}
     </div>
+  );
+}
+
+export default function AllTasksPage() {
+  return (
+    <Suspense fallback={<TaskListSkeleton rows={6} />}>
+      <AllTasksView />
+    </Suspense>
   );
 }

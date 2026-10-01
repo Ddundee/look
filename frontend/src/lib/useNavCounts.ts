@@ -8,7 +8,6 @@ import { isTaskDone } from "./types";
 export interface NavCounts {
   today: number;
   overdue: number;
-  inbox: number;
 }
 
 /** Live badge counts for the sidebar, refreshed whenever any task changes. */
@@ -20,8 +19,9 @@ export function useNavCounts(enabled: boolean): NavCounts | null {
     let cancelled = false;
 
     function load() {
-      Promise.all([api.getToday(), api.listTasks({ status: "inbox" })])
-        .then(([today, inbox]) => {
+      api
+        .getToday()
+        .then((today) => {
           if (cancelled) return;
           const open = new Set<string>();
           for (const t of [...today.overdue, ...today.scheduled, ...today.due_today]) {
@@ -30,7 +30,6 @@ export function useNavCounts(enabled: boolean): NavCounts | null {
           setCounts({
             today: open.size,
             overdue: today.overdue.filter((t) => !isTaskDone(t)).length,
-            inbox: inbox.count,
           });
         })
         .catch(() => {
