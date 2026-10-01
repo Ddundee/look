@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CalendarCheckIcon, FireIcon, SunIcon, WarningCircleIcon } from "@phosphor-icons/react";
+import { CalendarBlankIcon, CalendarCheckIcon, FireIcon, SunIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import { api } from "@/lib/api";
-import { notifyTasksChanged, onTasksChanged } from "@/lib/events";
-import { formatDateLong } from "@/lib/format";
-import { isTaskDone, type Task, type TodayView } from "@/lib/types";
+import { notifyTasksChanged, onEventsChanged, onTasksChanged } from "@/lib/events";
+import { formatDateLong, todayIso } from "@/lib/format";
+import { isTaskDone, type Occurrence, type Task, type TodayView } from "@/lib/types";
+import { SECTION_HEADING } from "@/lib/ui";
 import { EmptyState, ErrorState, PageHeader, TaskListSkeleton, TaskSection } from "@/components/PageParts";
+import AgendaList from "@/components/events/AgendaList";
+import EventEditor, { type EditorTarget } from "@/components/events/EventEditor";
 
 function greeting(): string {
   const h = new Date().getHours();
@@ -20,6 +23,20 @@ export default function TodayPage() {
   const [view, setView] = useState<TodayView | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [schedule, setSchedule] = useState<Occurrence[]>([]);
+  const [editor, setEditor] = useState<EditorTarget | null>(null);
+
+  useEffect(() => {
+    function loadSchedule() {
+      const day = todayIso();
+      api
+        .getSchedule(day, day)
+        .then((s) => setSchedule(s.occurrences))
+        .catch(() => {});
+    }
+    loadSchedule();
+    return onEventsChanged(loadSchedule);
+  }, []);
 
   useEffect(() => {
     function load() {
@@ -97,12 +114,22 @@ export default function TodayPage() {
         }
       />
 
-      {nothingToShow ? (
+      {nothingToShow && schedule.length === 0 ? (
         <EmptyState icon={CalendarCheckIcon} title="A clear day">
           Nothing planned or due. Add something above, or plan a task from Inbox or All Tasks with the sun button.
         </EmptyState>
       ) : (
         <div className="space-y-8">
+          {schedule.length > 0 && (
+            <section className="anim-fade-up">
+              <h2 className={SECTION_HEADING}>
+                <CalendarBlankIcon weight="bold" className="h-4 w-4 text-accent" aria-hidden />
+                Schedule
+                <span className="font-mono text-xs font-normal tabular-nums text-fg-faint">{schedule.length}</span>
+              </h2>
+              <AgendaList occurrences={schedule} onOpen={(occ) => setEditor({ kind: "occurrence", occ })} />
+            </section>
+          )}
           <TaskSection
             title="Overdue"
             icon={WarningCircleIcon}
@@ -138,6 +165,7 @@ export default function TodayPage() {
           />
         </div>
       )}
+      {editor && <EventEditor target={editor} onClose={() => setEditor(null)} />}
     </div>
   );
 }
