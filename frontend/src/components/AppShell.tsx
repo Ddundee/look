@@ -12,6 +12,7 @@ import {
   ListChecksIcon,
   ListIcon,
   SignOutIcon,
+  SquaresFourIcon,
   SunHorizonIcon,
   SunIcon,
   TrayIcon,
@@ -27,6 +28,7 @@ import ThemeToggle from "./ThemeToggle";
 import Toaster from "./Toaster";
 
 const NAV: { href: string; label: string; icon: Icon; count?: keyof NavCounts }[] = [
+  { href: "/dashboard", label: "Dashboard", icon: SquaresFourIcon },
   { href: "/today", label: "Today", icon: SunIcon, count: "today" },
   { href: "/inbox", label: "Inbox", icon: TrayIcon, count: "inbox" },
   { href: "/tasks", label: "All Tasks", icon: ListChecksIcon },

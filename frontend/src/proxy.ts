@@ -13,7 +13,7 @@ export function proxy(request: NextRequest) {
 
   if (pathname === "/login") {
     if (hasSession) {
-      return NextResponse.redirect(new URL("/today", request.url));
+      return NextResponse.redirect(new URL("/dashboard", request.url));
     }
     return NextResponse.next();
   }

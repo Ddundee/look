@@ -20,7 +20,7 @@ export default function LoginPage() {
     setError(null);
     try {
       await api.login(username, password);
-      router.push("/today");
+      router.push("/dashboard");
       router.refresh();
     } catch (err) {
       setError(
