@@ -87,3 +87,92 @@ export interface TaskCreatePayload {
 }
 
 export type TaskUpdatePayload = Partial<TaskCreatePayload>;
+
+// ---- Nutrition ------------------------------------------------------------
+
+export type MealType = "breakfast" | "lunch" | "dinner" | "snack";
+export type MacroKey = "calories" | "protein_g" | "carbs_g" | "fat_g";
+
+export interface FoodEntry {
+  id: string;
+  name: string;
+  quantity: string | null;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  meal: MealType | null;
+  eaten_on: string;
+  eaten_at: string | null;
+  notes: string | null;
+  source: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type MacroTotals = Record<MacroKey, number>;
+
+export interface MacroRemaining {
+  calories: number;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
+}
+
+export interface NutritionTargets {
+  calories: number;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
+  effective_from: string;
+}
+
+export interface DaySummary {
+  day: string;
+  entries: FoodEntry[];
+  totals: MacroTotals;
+  targets: NutritionTargets | null;
+  remaining: MacroRemaining | null;
+  over: MacroKey[];
+}
+
+export interface HistoryDay {
+  day: string;
+  entry_count: number;
+  totals: MacroTotals;
+  targets: NutritionTargets | null;
+}
+
+export interface HistorySummary {
+  start_date: string;
+  end_date: string;
+  days: HistoryDay[];
+  logged_days: number;
+  averages: MacroTotals | null;
+}
+
+export interface TargetsResponse {
+  current: NutritionTargets | null;
+  history: NutritionTargets[];
+}
+
+export interface FoodEntryPayload {
+  name?: string;
+  calories?: number;
+  quantity?: string | null;
+  protein_g?: number;
+  carbs_g?: number;
+  fat_g?: number;
+  meal?: MealType | null;
+  eaten_on?: string;
+  eaten_at?: string | null;
+  notes?: string | null;
+}
+
+export interface NutritionTargetsPayload {
+  calories: number;
+  protein_g?: number | null;
+  carbs_g?: number | null;
+  fat_g?: number | null;
+  effective_from?: string;
+}

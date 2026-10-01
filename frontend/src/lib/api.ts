@@ -1,4 +1,10 @@
 import type {
+  DaySummary,
+  FoodEntry,
+  FoodEntryPayload,
+  HistorySummary,
+  NutritionTargetsPayload,
+  TargetsResponse,
   Task,
   TaskCreatePayload,
   TaskListResponse,
@@ -37,7 +43,16 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     let detail = res.statusText;
     try {
       const body = await res.json();
-      detail = body.detail || JSON.stringify(body);
+      if (Array.isArray(body.detail)) {
+        // FastAPI validation errors: [{loc: ["body", "calories"], msg: "..."}]
+        detail = body.detail
+          .map((d: { loc?: unknown[]; msg?: string }) =>
+            [d.loc?.filter((p) => p !== "body").join("."), d.msg].filter(Boolean).join(": ")
+          )
+          .join("; ");
+      } else {
+        detail = body.detail || JSON.stringify(body);
+      }
     } catch {
       // ignore
     }
@@ -122,4 +137,28 @@ export const api = {
       }`,
       { method: "POST" }
     ),
+
+  getNutritionDay: (date?: string) => request<DaySummary>(`/api/nutrition/day${qs({ date })}`),
+  getNutritionHistory: (start_date: string, end_date?: string) =>
+    request<HistorySummary>(`/api/nutrition/history${qs({ start_date, end_date })}`),
+  createFoodEntry: (payload: FoodEntryPayload) =>
+    request<{ entry: FoodEntry; day: DaySummary }>("/api/nutrition/entries", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  updateFoodEntry: (id: string, payload: FoodEntryPayload) =>
+    request<{ entry: FoodEntry; day: DaySummary }>(`/api/nutrition/entries/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  deleteFoodEntry: (id: string) =>
+    request<{ deleted_id: string; day: DaySummary }>(`/api/nutrition/entries/${id}`, {
+      method: "DELETE",
+    }),
+  getNutritionTargets: () => request<TargetsResponse>("/api/nutrition/targets"),
+  setNutritionTargets: (payload: NutritionTargetsPayload) =>
+    request<TargetsResponse>("/api/nutrition/targets", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
 };
