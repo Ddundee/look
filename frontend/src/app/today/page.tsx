@@ -116,7 +116,7 @@ export default function TodayPage() {
 
       {nothingToShow && schedule.length === 0 ? (
         <EmptyState icon={CalendarCheckIcon} title="A clear day">
-          Nothing planned or due. Add a task from the Dashboard, or plan one from Inbox or All Tasks with the sun button.
+          Nothing planned or due. Add a task from the Dashboard, or plan one from All Tasks with the sun button.
         </EmptyState>
       ) : (
         <div className="space-y-8">

@@ -410,7 +410,7 @@ export default function DashboardPage() {
       </Tile>
 
       {/* Next 7 days */}
-      <Tile title="Next 7 days" icon={CalendarDotsIcon} href="/upcoming" link="Upcoming" className="order-5 md:order-none md:col-span-6 md:row-span-3">
+      <Tile title="Next 7 days" icon={CalendarDotsIcon} href="/calendar" link="Calendar" className="order-5 md:order-none md:col-span-6 md:row-span-3">
         {(upcoming.error && !upcoming.data) || (dueSoon.error && !dueSoon.data) ? (
           <TileError
             message={upcoming.error ?? dueSoon.error ?? "Couldn't load"}

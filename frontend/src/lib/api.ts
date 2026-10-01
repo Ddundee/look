@@ -134,8 +134,6 @@ export const api = {
     request<Task>(`/api/tasks/${id}/unplan-today`, { method: "POST" }),
 
   getToday: () => request<TodayView>("/api/today"),
-  getOverdue: () => request<TaskListResponse>("/api/overdue"),
-  getUpcoming: (days = 7) => request<TaskListResponse>(`/api/upcoming${qs({ days })}`),
   getWeekSummary: (start_date?: string) =>
     request<WeekSummary>(`/api/week-summary${qs({ start_date })}`),
   carryForward: (from_date: string, to_date: string, priorities?: string[]) =>

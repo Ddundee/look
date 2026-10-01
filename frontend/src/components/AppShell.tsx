@@ -13,9 +13,7 @@ import {
   ListIcon,
   SignOutIcon,
   SquaresFourIcon,
-  SunHorizonIcon,
   SunIcon,
-  TrayIcon,
   XIcon,
   type Icon,
 } from "@phosphor-icons/react";
@@ -29,9 +27,7 @@ import UpdateChecker from "./UpdateChecker";
 const NAV: { href: string; label: string; icon: Icon; count?: keyof NavCounts }[] = [
   { href: "/dashboard", label: "Dashboard", icon: SquaresFourIcon },
   { href: "/today", label: "Today", icon: SunIcon, count: "today" },
-  { href: "/inbox", label: "Inbox", icon: TrayIcon, count: "inbox" },
   { href: "/tasks", label: "All Tasks", icon: ListChecksIcon },
-  { href: "/upcoming", label: "Upcoming", icon: SunHorizonIcon },
   { href: "/calendar", label: "Calendar", icon: CalendarDotsIcon },
   { href: "/nutrition", label: "Nutrition", icon: ForkKnifeIcon },
   { href: "/completed", label: "Completed", icon: CheckCircleIcon },

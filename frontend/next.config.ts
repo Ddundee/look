@@ -20,6 +20,16 @@ const nextConfig: NextConfig = {
   // up looking for a lockfile and may latch onto an unrelated one further
   // up the filesystem, which throws off standalone-build file tracing.
   outputFileTracingRoot: path.join(__dirname),
+  // The dedicated Inbox and Upcoming pages were removed (see the README's
+  // "Views" note). Old bookmarks land on the closest surviving view:
+  // undated "inbox" tasks pre-filtered in All Tasks, and the Calendar for
+  // what's coming up. 307 (not permanent) so browsers don't cache them.
+  async redirects() {
+    return [
+      { source: "/inbox", destination: "/tasks?status=inbox", permanent: false },
+      { source: "/upcoming", destination: "/calendar", permanent: false },
+    ];
+  },
   async rewrites() {
     return [
       { source: "/api/:path*", destination: `${backendUrl}/api/:path*` },
