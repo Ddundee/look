@@ -21,10 +21,10 @@ todo-app/
       services/       business logic (CRUD, recurrence, priority, today view)
       routers/        REST endpoints (auth/tasks/today/recurring)
     mcp_server/       MCP server (19 tools + 3 resources) — same DB, same service layer
-    tests/            pytest suite (58 tests)
+    tests/            pytest suite (incl. migration tests)
   frontend/           Next.js (App Router) web UI, proxies /api/* to the backend
   docker-compose.yml  db + backend + mcp + frontend
-  scripts/            backup.sh / restore.sh
+  scripts/            backup.sh / restore.sh / upgrade.sh
   docs/               deployment, Tailscale, MCP client setup
 ```
 
@@ -42,7 +42,8 @@ as a one-click update; see `docs/DEPLOYMENT.md`.
 See [`docs/TASK_MODEL.md`](docs/TASK_MODEL.md) for the data model and
 priority-scoring logic, [`docs/MCP.md`](docs/MCP.md) for the full list of
 MCP tools/resources and client setup, [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
-for Raspberry Pi deployment, and [`docs/TAILSCALE.md`](docs/TAILSCALE.md)
+for Raspberry Pi deployment, [`docs/DATABASE.md`](docs/DATABASE.md) for
+migrations, backups and safe upgrades, and [`docs/TAILSCALE.md`](docs/TAILSCALE.md)
 for secure remote access.
 
 ## Quickstart: Docker Compose (recommended)
@@ -82,6 +83,7 @@ export DB_ENGINE=sqlite SQLITE_PATH=./data/dev.db
 export API_TOKEN=dev-token SESSION_SECRET=dev-secret-change-me
 export ADMIN_USERNAME=admin ADMIN_PASSWORD=admin
 
+python -m app.migrate        # create/upgrade the schema (the app refuses to start otherwise)
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
@@ -180,62 +182,50 @@ Put `backup.sh` in cron for automatic daily backups:
 
 ## Updating the application later
 
+The easiest way is the **Update** button the web app shows when a new
+version is published (Settings → Version). From a shell:
+
 ```bash
 cd todo-app
-git pull
-docker compose pull            # grab the latest prebuilt images from ghcr.io
-docker compose up -d           # restarts only the services that changed
+git pull                       # only needed if docker-compose.yml/scripts changed
+./scripts/upgrade.sh           # backup -> pull -> migrate -> restart -> health check
 ```
 
-(`docker compose up -d --build` also still works if you're running a fork
-without CI publishing images, or have local changes to build.)
-
-Your data isn't touched — it lives in the `postgres_data` named volume,
-independent of the containers/images. Back up first if you're doing a
-major version jump (`./scripts/backup.sh`).
+`./scripts/upgrade.sh --build` builds from your checkout instead of pulling
+published images. See [`docs/DATABASE.md`](docs/DATABASE.md) for details.
 
 ### Why this doesn't lose data or log you out
 
-- **Database**: Postgres data lives in the `postgres_data` named volume.
-  `up -d` / `up -d --build` only replace images and recreate containers —
-  volumes are untouched. (Don't run `docker compose down -v`; the `-v`
-  flag deletes volumes.)
-- **Schema changes are additive-only**: startup runs
-  `SQLModel.metadata.create_all()`, which adds new tables/columns and
-  never drops or rewrites existing ones (see "V1 scope" above).
+- **Database**: Postgres data lives in the `todo-app_postgres_data` named
+  volume. Updates only replace images and recreate containers; volumes are
+  untouched. (Don't run `docker compose down -v`; `-v` deletes volumes.)
+- **Schema changes are versioned migrations** (Alembic). They run before
+  the app starts, after a backup, inside a transaction, and they never drop
+  tables or columns just because they left the models. A database from
+  before migrations existed is verified and adopted in place. See
+  [`docs/DATABASE.md`](docs/DATABASE.md).
 - **Your login survives**: the admin account is only seeded if no user
   exists yet (`app/services/auth.py`), so an existing account is never
   reset or overwritten by a restart. `SESSION_SECRET` stays in `.env`
   across updates too, so your browser session isn't invalidated.
 - **Downtime is brief and scoped**: `docker compose up -d` only recreates
-  the containers whose image/config actually changed — e.g. an update
-  that only touches the frontend won't restart `backend`, `mcp`, or `db`.
-  Expect a few seconds of downtime per affected service, not a full outage.
-
-## Authentication model
-
-- **`API_TOKEN`** (long random string): a single Bearer token for the MCP
-  server and any programmatic REST API access. Not tied to a specific
-  user — this is a personal, single-user system.
-- **Username/password** (`ADMIN_USERNAME`/`ADMIN_PASSWORD` in `.env`, only
-  used to seed the one web-UI account on first boot): the web UI logs in
-  with these and gets a signed, `HttpOnly` session cookie. Passwords are
-  bcrypt-hashed in the database; the plaintext from `.env` is never stored.
-- No public auth provider, no external dependency — this is designed to
-  sit behind Tailscale for remote access rather than expose an internet
-  login page.
+  the containers whose image/config actually changed. Expect a few seconds
+  of downtime per affected service, not a full outage.
 
 ## Testing
 
 ```bash
 cd backend && .venv/bin/pytest -q
+alembic check                     # models vs migrations (needs a migrated DB)
 ```
 
-58 tests cover task CRUD, every recurrence pattern, priority-score
+Set `TEST_DATABASE_URL` to a **throwaway** PostgreSQL database to also run
+the migration tests on Postgres (CI does). The tests cover task CRUD, every recurrence pattern, priority-score
 ordering (including that manual priority is never overwritten),
 today-view assembly (including recurring-task materialization and dedup
 across sections), and MCP tool execution end-to-end against an in-memory
-database.
+database, plus migrations: fresh install, adopting a pre-migration
+database with real data, downgrade/upgrade, and model/migration drift.
 
 ## V1 scope
 
@@ -246,8 +236,7 @@ tools + 3 MCP resources, Docker deployment, token + session auth, backups.
 Deliberately deferred to keep V1 focused (see `integrations/` note below):
 Gmail/Calendar/GitHub/Slack/Discord connectors, natural-language parsing
 via an LLM (the quick-add bar uses a small local regex parser instead —
-no AI API required for the app to work), and a full migration framework
-(schema changes currently use SQLModel's `create_all`, additive-only).
+no AI API required for the app to work).
 
 ## Future integrations
 

@@ -1,12 +1,16 @@
 from datetime import timedelta
 
+from app.migrate import head_revision
 from app.utils import local_today
 
 
 def test_health_check_requires_no_auth(client):
     resp = client.get("/health")
     assert resp.status_code == 200
-    assert resp.json() == {"status": "ok"}
+    body = resp.json()
+    assert body["status"] == "ok"
+    assert body["db_revision"] == head_revision()
+    assert "version" in body
 
 
 def test_tasks_endpoint_requires_auth(client):

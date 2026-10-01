@@ -7,12 +7,15 @@ the internal Compose network and only with the app's API token:
 * GET /status   compare the commit the running backend/frontend images were
                 built from (OCI revision label) with the head commit of the
                 latest successful publish workflow run on GitHub.
-* POST /update  `docker compose pull` then `up -d` for a fixed list of app
-                services. Never db, the tunnel, or this container.
+* POST /update  `docker compose pull`, back up the database with pg_dump
+                (migrations run when the app restarts), then `up -d` for a
+                fixed list of app services. Never restarts db, the tunnel,
+                or this container. No backup, no restart.
 
 Stdlib only, so the image is just Python plus the Docker CLI.
 """
 
+import gzip
 import hmac
 import json
 import os
@@ -22,6 +25,7 @@ import sys
 import threading
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Callable, Dict, List, Optional, Tuple
 from urllib.request import Request, urlopen
@@ -33,6 +37,8 @@ MAX_CHANGES = 20
 VERSIONED_SERVICES = ("backend", "frontend")
 PROTECTED_SERVICES = {"db", "updater", "openai-tunnel"}
 _SERVICE_NAME = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
+# Runs pg_dump inside the db container with its own credentials.
+BACKUP_COMMAND = ["docker", "compose", "exec", "-T", "db", "sh", "-c", 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"']
 
 
 def now_iso() -> str:
@@ -63,6 +69,7 @@ class Updater:
         fetch: Callable[[str], dict] = fetch_json,
         clock: Callable[[], float] = time.monotonic,
         spawn: Optional[Callable[[Callable[[], None]], None]] = None,
+        backup_dir: str = "/backups",
     ):
         for name in services:
             if not _SERVICE_NAME.match(name) or name in PROTECTED_SERVICES:
@@ -72,12 +79,15 @@ class Updater:
         self.repo = repo
         self.workflow = workflow
         self.services = list(services)
+        self.backup_dir = Path(backup_dir)
         self.run = run
         self.fetch = fetch
         self.clock = clock
         self.spawn = spawn or (lambda fn: threading.Thread(target=fn, daemon=True).start())
         self.lock = threading.Lock()
-        self.job: Dict = {"state": "idle", "error": None, "started_at": None, "finished_at": None, "target": None}
+        self.job: Dict = {
+            "state": "idle", "error": None, "started_at": None, "finished_at": None, "target": None, "backup": None,
+        }
         self._latest: Optional[Dict] = None
         self._fetched_at: Optional[float] = None
         self._last_refresh: Optional[float] = None
@@ -157,7 +167,7 @@ class Updater:
     # ---- update job -------------------------------------------------------
 
     def _running(self) -> bool:
-        return self.job["state"] in ("pulling", "restarting")
+        return self.job["state"] in ("pulling", "backing_up", "restarting")
 
     def start_update(self, force: bool = False) -> Tuple[int, Dict]:
         with self.lock:
@@ -175,6 +185,7 @@ class Updater:
                 "started_at": now_iso(),
                 "finished_at": None,
                 "target": snapshot["latest"]["sha"] if snapshot["latest"] else None,
+                "backup": None,
             }
             job = dict(self.job)
         self.spawn(self._run_job)
@@ -184,21 +195,46 @@ class Updater:
         with self.lock:
             self.job.update(fields)
 
+    def _backup(self) -> str:
+        """pg_dump the database to <backup_dir>/todo-app-<time>-pre-update.sql.gz
+        (same naming as scripts/backup.sh, so its pruning applies too)."""
+        result = self.run(BACKUP_COMMAND)
+        if result.returncode != 0:
+            raise RuntimeError(_tail(result.stderr or result.stdout))
+        if not result.stdout.strip():
+            raise RuntimeError("pg_dump produced no output.")
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        path = self.backup_dir / f"todo-app-{stamp}-pre-update.sql.gz"
+        self.backup_dir.mkdir(parents=True, exist_ok=True)
+        with gzip.open(path, "wt", encoding="utf-8") as out:
+            out.write(result.stdout)
+        return str(path)
+
     def _run_job(self) -> None:
-        steps = [
-            ("pulling", ["docker", "compose", "pull", *self.services]),
-            ("restarting", ["docker", "compose", "up", "-d", "--no-deps", "--no-build", *self.services]),
-        ]
-        for state, args in steps:
+        def step(state: str, args: List[str]) -> bool:
             self._set(state=state)
             try:
                 result = self.run(args)
             except Exception as exc:
                 self._set(state="failed", error=str(exc), finished_at=now_iso())
-                return
+                return False
             if result.returncode != 0:
                 self._set(state="failed", error=_tail(result.stderr or result.stdout), finished_at=now_iso())
-                return
+                return False
+            return True
+
+        if not step("pulling", ["docker", "compose", "pull", *self.services]):
+            return
+        # The new images apply database migrations when they start, so take a
+        # backup first. If it fails, nothing is restarted.
+        self._set(state="backing_up")
+        try:
+            self._set(backup=self._backup())
+        except Exception as exc:
+            self._set(state="failed", error=f"Backup failed, so nothing was restarted: {exc}", finished_at=now_iso())
+            return
+        if not step("restarting", ["docker", "compose", "up", "-d", "--no-deps", "--no-build", *self.services]):
+            return
         self._set(state="done", finished_at=now_iso())
 
 
@@ -258,6 +294,7 @@ def main() -> None:
         repo=os.environ.get("UPDATER_GITHUB_REPO", "Ddundee/look"),
         workflow=os.environ.get("UPDATER_WORKFLOW", "docker-publish.yml"),
         services=os.environ.get("UPDATER_SERVICES", "backend mcp frontend").split(),
+        backup_dir=os.environ.get("UPDATER_BACKUP_DIR", "/backups"),
     )
     server = ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("UPDATER_PORT", "8080"))), make_handler(updater, token))
     print("updater: listening on", server.server_address, flush=True)

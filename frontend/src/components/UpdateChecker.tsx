@@ -84,6 +84,9 @@ async function runUpdate(target: string | null): Promise<void> {
     try {
       const job = (await api.getUpdateStatus()).job;
       if (job?.state === "failed") return showFailed(job.error ?? "The update failed.", target);
+      if (job?.state === "backing_up") {
+        sonner.loading("Backing up your data", { id: TOAST_ID, duration: Infinity, description: "Before the new version starts." });
+      }
       if (job?.state === "restarting" || job?.state === "done") restarting();
       if (job?.state === "done") {
         const { revision } = await api.getVersion();
