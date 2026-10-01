@@ -1,5 +1,8 @@
+import gzip
 import json
 import subprocess
+import tempfile
+from pathlib import Path
 import threading
 from http.server import ThreadingHTTPServer
 from urllib.error import HTTPError
@@ -35,6 +38,8 @@ class FakeDocker:
             return subprocess.CompletedProcess(args, 0, (rev or "<no value>") + "\n", "")
         if self.fail_on and args[:3] == ["docker", "compose", self.fail_on]:
             return subprocess.CompletedProcess(args, 1, "", "line1\nError: pull access denied\n")
+        if args[:3] == ["docker", "compose", "exec"]:
+            return subprocess.CompletedProcess(args, 0, "-- PostgreSQL database dump\nCREATE TABLE tasks ();\n", "")
         return subprocess.CompletedProcess(args, 0, "ok", "")
 
 
@@ -64,7 +69,7 @@ class Clock:
         return self.t
 
 
-def make(revisions=None, github=None, clock=None, docker=None, spawn=None):
+def make(revisions=None, github=None, clock=None, docker=None, spawn=None, backup_dir=None):
     docker = docker or FakeDocker(revisions if revisions is not None else {"backend": CURRENT, "frontend": CURRENT})
     return up.Updater(
         repo="Ddundee/look",
@@ -74,6 +79,7 @@ def make(revisions=None, github=None, clock=None, docker=None, spawn=None):
         fetch=github or FakeGitHub(),
         clock=clock or Clock(),
         spawn=spawn or (lambda fn: fn()),
+        backup_dir=str(backup_dir or tempfile.mkdtemp()),
     ), docker
 
 
@@ -128,17 +134,30 @@ def test_github_cached_and_refresh_throttled():
     assert gh.urls[0] == RUNS_URL
 
 
-def test_update_runs_fixed_commands_and_finishes():
-    u, docker = make()
+def test_update_pulls_backs_up_then_restarts(tmp_path):
+    u, docker = make(backup_dir=tmp_path)
     code, body = u.start_update()
     assert code == 202
-    compose_cmds = [c for c in docker.calls if c[:2] == ["docker", "compose"] and c[2] in ("pull", "up")]
+    compose_cmds = [c for c in docker.calls if c[:2] == ["docker", "compose"] and c[2] in ("pull", "exec", "up")]
     assert compose_cmds == [
         ["docker", "compose", "pull", "backend", "mcp", "frontend"],
+        ["docker", "compose", "exec", "-T", "db", "sh", "-c", 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"'],
         ["docker", "compose", "up", "-d", "--no-deps", "--no-build", "backend", "mcp", "frontend"],
     ]
     job = u.status()["job"]
     assert job["state"] == "done" and job["target"] == LATEST and job["finished_at"]
+    backup = Path(job["backup"])
+    assert backup.parent == tmp_path and backup.name.startswith("todo-app-") and backup.name.endswith("-pre-update.sql.gz")
+    assert "CREATE TABLE tasks" in gzip.open(backup, "rt").read()
+
+
+def test_failed_backup_stops_before_restart(tmp_path):
+    u, docker = make(docker=FakeDocker({"backend": CURRENT, "frontend": CURRENT}, fail_on="exec"), backup_dir=tmp_path)
+    u.start_update()
+    job = u.status()["job"]
+    assert job["state"] == "failed" and job["error"].startswith("Backup failed")
+    assert not any(c[:3] == ["docker", "compose", "up"] for c in docker.calls)
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_update_failure_reports_stderr_and_skips_restart():

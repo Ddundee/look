@@ -22,8 +22,8 @@ frontend/.env*.local
 !.env.example
 
 # Docker
-backups/*.sql.gz
-backups/*.sql
+# Database dumps from scripts/backup.sh and the updater: never commit them.
+backups/
 
 # OS
 .DS_Store

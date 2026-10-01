@@ -248,7 +248,7 @@ export interface OccurrenceEditPayload {
 
 // ---- Self-update ------------------------------------------------------------
 
-export type UpdateJobState = "idle" | "pulling" | "restarting" | "done" | "failed";
+export type UpdateJobState = "idle" | "pulling" | "backing_up" | "restarting" | "done" | "failed";
 
 export interface UpdateJob {
   state: UpdateJobState;
@@ -256,6 +256,7 @@ export interface UpdateJob {
   started_at: string | null;
   finished_at: string | null;
   target: string | null;
+  backup?: string | null;
 }
 
 export interface UpdateStatus {
