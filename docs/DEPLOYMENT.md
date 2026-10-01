@@ -127,20 +127,20 @@ reloads itself on the new version (roughly 10 to 30 seconds of downtime).
 **Later** hides the toast until the next new version. Settings → Version
 shows what's running and has a **Check for updates** button.
 
-The updater never touches `db` (your data lives in the
+The updater backs up the database to `backups/` before restarting
+anything, and the new containers apply any database migrations as they
+start. It never touches `db` (your data lives in the
 `todo-app_postgres_data` volume), the tunnel, or itself.
 
 **From a shell (fallback, and the only way to update the updater):**
 
 ```bash
 cd todo-app
-git pull              # only needed if docker-compose.yml itself changed
-docker compose pull   # latest images from ghcr.io
-docker compose up -d
+git pull                # only needed if docker-compose.yml/scripts changed
+./scripts/upgrade.sh    # backup -> pull -> migrate -> restart -> health check
 ```
 
-This only restarts services whose image actually changed. Take a backup
-before anything bigger than a routine update; see the root `README.md`.
+See [`DATABASE.md`](DATABASE.md) for migrations, backups and restores.
 
 To turn in-app updates off, set `UPDATER_URL=` (empty) in `.env` and
 `docker compose stop updater`.
