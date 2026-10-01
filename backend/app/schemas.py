@@ -1,9 +1,9 @@
 from datetime import date, datetime, time
 from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.models.enums import RecurrencePattern, TaskPriority, TaskStatus
+from app.models.enums import MealType, RecurrencePattern, TaskPriority, TaskStatus
 
 
 # ---------------------------------------------------------------------------
@@ -145,3 +145,151 @@ class WeekSummary(BaseModel):
 class LoginRequest(BaseModel):
     username: str
     password: str
+
+
+# ---------------------------------------------------------------------------
+# Nutrition
+# ---------------------------------------------------------------------------
+
+
+def _clean_name(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    value = value.strip()
+    if not value:
+        raise ValueError("name can't be blank")
+    return value
+
+
+class FoodEntryCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    calories: float = Field(ge=0)
+    quantity: Optional[str] = Field(default=None, max_length=100)
+    protein_g: float = Field(default=0, ge=0)
+    carbs_g: float = Field(default=0, ge=0)
+    fat_g: float = Field(default=0, ge=0)
+    meal: Optional[MealType] = None
+    eaten_on: Optional[date] = None  # defaults to today in APP_TIMEZONE
+    eaten_at: Optional[time] = None
+    notes: Optional[str] = None
+
+    @field_validator("name")
+    @classmethod
+    def _strip_name(cls, v: Optional[str]) -> Optional[str]:
+        return _clean_name(v)
+
+
+class FoodEntryUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    calories: Optional[float] = Field(default=None, ge=0)
+    quantity: Optional[str] = Field(default=None, max_length=100)
+    protein_g: Optional[float] = Field(default=None, ge=0)
+    carbs_g: Optional[float] = Field(default=None, ge=0)
+    fat_g: Optional[float] = Field(default=None, ge=0)
+    meal: Optional[MealType] = None
+    eaten_on: Optional[date] = None
+    eaten_at: Optional[time] = None
+    notes: Optional[str] = None
+
+    @field_validator("name")
+    @classmethod
+    def _strip_name(cls, v: Optional[str]) -> Optional[str]:
+        return _clean_name(v)
+
+
+class FoodEntryRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    name: str
+    quantity: Optional[str]
+    calories: float
+    protein_g: float
+    carbs_g: float
+    fat_g: float
+    meal: Optional[MealType]
+    eaten_on: date
+    eaten_at: Optional[time]
+    notes: Optional[str]
+    source: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class MacroTotals(BaseModel):
+    calories: float = 0
+    protein_g: float = 0
+    carbs_g: float = 0
+    fat_g: float = 0
+
+
+class MacroRemaining(BaseModel):
+    """Target minus eaten; negative means over. None when that macro has
+    no target."""
+
+    calories: float
+    protein_g: Optional[float] = None
+    carbs_g: Optional[float] = None
+    fat_g: Optional[float] = None
+
+
+class NutritionTargetsRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    calories: float
+    protein_g: Optional[float]
+    carbs_g: Optional[float]
+    fat_g: Optional[float]
+    effective_from: date
+
+
+class NutritionTargetsSet(BaseModel):
+    calories: float = Field(gt=0)
+    protein_g: Optional[float] = Field(default=None, ge=0)
+    carbs_g: Optional[float] = Field(default=None, ge=0)
+    fat_g: Optional[float] = Field(default=None, ge=0)
+    effective_from: Optional[date] = None  # defaults to today
+
+
+class DaySummary(BaseModel):
+    day: date
+    entries: List[FoodEntryRead]
+    totals: MacroTotals
+    targets: Optional[NutritionTargetsRead]
+    remaining: Optional[MacroRemaining]
+    over: List[str]  # macro keys eaten past their target
+
+
+class HistoryDay(BaseModel):
+    day: date
+    entry_count: int
+    totals: MacroTotals
+    targets: Optional[NutritionTargetsRead]
+
+
+class HistorySummary(BaseModel):
+    start_date: date
+    end_date: date
+    days: List[HistoryDay]
+    logged_days: int
+    averages: Optional[MacroTotals]  # over days with at least one entry
+
+
+class TargetsResponse(BaseModel):
+    current: Optional[NutritionTargetsRead]
+    history: List[NutritionTargetsRead]  # newest first
+
+
+class FoodEntryWithDay(BaseModel):
+    entry: FoodEntryRead
+    day: DaySummary
+
+
+class FoodDeleteResult(BaseModel):
+    deleted_id: str
+    day: DaySummary
+
+
+class FoodEntryList(BaseModel):
+    entries: List[FoodEntryRead]
+    count: int

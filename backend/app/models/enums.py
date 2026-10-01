@@ -35,3 +35,10 @@ class RecurrencePattern(str, Enum):
     specific_days = "specific_days"
     monthly = "monthly"
     custom_interval = "custom_interval"
+
+
+class MealType(str, Enum):
+    breakfast = "breakfast"
+    lunch = "lunch"
+    dinner = "dinner"
+    snack = "snack"
