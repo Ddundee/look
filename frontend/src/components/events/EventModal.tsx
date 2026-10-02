@@ -5,7 +5,6 @@ import { CircleNotchIcon, TrashIcon, WarningCircleIcon } from "@phosphor-icons/r
 import { api } from "@/lib/api";
 import {
   buildRrule,
-  EVENT_CATEGORIES,
   parseRrule,
   splitLocal,
   WEEKDAYS,
@@ -18,7 +17,9 @@ import { addDaysIso, formatDate } from "@/lib/format";
 import { toast, toastError } from "@/lib/toast";
 import type { CalendarEvent, EventPayload, Occurrence } from "@/lib/types";
 import { BUTTON_PRIMARY, BUTTON_SECONDARY, FIELD as FIELD_BASE, LABEL } from "@/lib/ui";
+import { activeCategories, useCatalog } from "@/lib/catalog";
 import Dialog from "../Dialog";
+import CourseSelect from "../look/CourseSelect";
 
 const FIELD = `mt-1.5 h-10 w-full ${FIELD_BASE}`;
 
@@ -44,6 +45,7 @@ export default function EventModal({
   onClose: () => void;
   onDone: () => void;
 }) {
+  const catalog = useCatalog();
   const start = event ? splitLocal(event.start_at) : { date: defaultDate, time: "09:00" };
   const end = event ? splitLocal(event.end_at) : { date: defaultDate, time: "10:00" };
 
@@ -199,8 +201,8 @@ export default function EventModal({
           Category
           <input list="event-categories" value={category} onChange={(e) => setCategory(e.target.value)} className={FIELD} />
           <datalist id="event-categories">
-            {EVENT_CATEGORIES.map((c) => (
-              <option key={c} value={c} />
+            {activeCategories(catalog).map((c) => (
+              <option key={c.key} value={c.key} label={c.name} />
             ))}
           </datalist>
         </label>
@@ -209,6 +211,8 @@ export default function EventModal({
           <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Optional" className={FIELD} />
         </label>
       </div>
+
+      {event && <CourseSelect eventId={event.id} courseId={event.course_id} />}
 
       <div className="flex items-center justify-between">
         <span className={LABEL} id="all-day-label">

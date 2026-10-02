@@ -1,5 +1,5 @@
-import { FlagIcon, HashIcon } from "@phosphor-icons/react";
-import { categoryHue, PRIORITY_LABEL, PRIORITY_TEXT, STATUS_LABEL, STATUS_STYLES } from "@/lib/format";
+import { FlagIcon } from "@phosphor-icons/react";
+import { PRIORITY_LABEL, PRIORITY_TEXT, STATUS_LABEL, STATUS_STYLES } from "@/lib/format";
 import type { TaskPriority, TaskStatus } from "@/lib/types";
 
 export function PriorityFlag({ priority }: { priority: TaskPriority }) {
@@ -21,11 +21,5 @@ export function StatusBadge({ status }: { status: TaskStatus }) {
   );
 }
 
-export function CategoryTag({ category }: { category: string }) {
-  return (
-    <span className="inline-flex items-center gap-0.5 whitespace-nowrap">
-      <HashIcon weight="bold" className={`h-3.5 w-3.5 ${categoryHue(category)}`} aria-hidden />
-      {category}
-    </span>
-  );
-}
+// Categories are styled from Settings; see components/look.
+export { CategoryTag } from "./look/Look";

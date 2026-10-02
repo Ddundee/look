@@ -62,6 +62,15 @@ class Event(SQLModel, table=True):
     completion_source: Optional[str] = None
     external_completed: Optional[bool] = None
 
+    # The class this belongs to (see app.services.courses). course_source is
+    # "auto" (Look matched it; re-checked on every sync) or "manual" (you
+    # chose, including "no course"; never overwritten). external_context is
+    # the source's own grouping, e.g. the Canvas course "canvas.vt.edu/
+    # course_123", kept so a manual correction can be remembered for it.
+    course_id: Optional[str] = Field(default=None, foreign_key="courses.id", index=True)
+    course_source: Optional[str] = None
+    external_context: Optional[str] = None
+
 
 class EventOverride(SQLModel, table=True):
     """One changed or cancelled date of a recurring series. Null fields

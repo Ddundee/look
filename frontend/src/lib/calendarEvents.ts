@@ -3,20 +3,6 @@
 
 export const EVENT_CATEGORIES = ["class", "social", "sports", "work", "appointment", "other"] as const;
 
-// A colored marker beside the category name (never color alone). Classes
-// are spelled out in full for Tailwind's static scanner.
-const HUES: Record<string, string> = {
-  class: "text-amber-500",
-  social: "text-pink-500",
-  sports: "text-emerald-500",
-  work: "text-violet-500",
-  appointment: "text-orange-600 dark:text-orange-400",
-  other: "text-fg-faint",
-};
-
-export function eventHue(category: string): string {
-  return HUES[category] ?? "text-fg-faint";
-}
 
 /** "10:00 AM" from a local ISO datetime (no timezone suffix = local). */
 export function timeLabel(iso: string): string {

@@ -222,6 +222,23 @@ appear in `get_schedule` with `subscription_name` and are read-only. See
 | `get_deadlines` | Imported assignments due in a date range, with `completed` and `completion_source` |
 | `set_deadline_completed` | Check a deadline off (or un-check it); nothing else about it changes |
 
+### Courses, categories and planning
+
+Courses are your classes (CS 3214). Canvas assignments link to theirs on
+their own; events titled like "CS 3214 lecture" link to an existing course.
+Categories (Personal, School, Research…) each have a color and a style.
+Colors and styles are fixed keys, never CSS. See
+[`PLANNING.md`](PLANNING.md).
+
+| Tool | Description |
+|---|---|
+| `get_work_plan` | Tasks and imported assignments to do: overdue, today, and undated open tasks (top few by priority) |
+| `list_courses` | Courses with aliases, linked Canvas courses and item counts |
+| `create_course` / `update_course` | Add, rename, restyle or archive a course; set aliases |
+| `map_event_to_course` | Set (or clear) an event's/assignment's course; for Canvas items it's remembered for that whole course |
+| `list_categories` | Categories with key, name, color and style |
+| `create_category` / `update_category` | Add, rename, restyle or archive a category |
+
 ## Resources (read-only)
 
 | URI | Contents |

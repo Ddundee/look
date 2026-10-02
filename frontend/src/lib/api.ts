@@ -1,4 +1,7 @@
 import type {
+  Category,
+  Course,
+  WorkPlan,
   CalendarSubscription,
   CalendarSyncResult,
   LeetCodeAttempt,
@@ -112,6 +115,8 @@ export const api = {
     due_after?: string;
     planned_for_date?: string;
     include_completed?: boolean;
+    /** Only tasks with no due date. */
+    undated?: boolean;
     q?: string;
   } = {}) => request<TaskListResponse>(`/api/tasks${qs(params)}`),
 
@@ -224,7 +229,28 @@ export const api = {
     return request<CalendarSyncResult>("/api/calendar-import", { method: "POST", body });
   },
 
-  getVersion: () => request<{ revision: string | null }>("/api/system/version"),
+  getVersion: () => request<{ revision: string | null; timezone?: string }>("/api/system/version"),
+
+  getWorkPlan: (date?: string) => request<WorkPlan>(`/api/today/work${qs({ date })}`),
+
+  listCategories: (includeArchived = false) =>
+    request<Category[]>(`/api/categories${qs({ include_archived: includeArchived || undefined })}`),
+  createCategory: (payload: { name: string; color?: string; style?: string }) =>
+    request<Category>("/api/categories", { method: "POST", body: JSON.stringify(payload) }),
+  updateCategory: (id: string, payload: { name?: string; color?: string; style?: string; archived?: boolean }) =>
+    request<Category>(`/api/categories/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  deleteCategory: (id: string) => request<{ deleted_id: string }>(`/api/categories/${id}`, { method: "DELETE" }),
+
+  listCourses: (includeArchived = false) =>
+    request<Course[]>(`/api/courses${qs({ include_archived: includeArchived || undefined })}`),
+  createCourse: (payload: { code: string; name?: string | null; color?: string; style?: string; aliases?: string[] }) =>
+    request<Course>("/api/courses", { method: "POST", body: JSON.stringify(payload) }),
+  updateCourse: (
+    id: string,
+    payload: { code?: string; name?: string | null; color?: string; style?: string; aliases?: string[]; archived?: boolean }
+  ) => request<Course>(`/api/courses/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  setEventCourse: (eventId: string, courseId: string | null) =>
+    request<CalendarEvent>(`/api/events/${eventId}/course`, { method: "PUT", body: JSON.stringify({ course_id: courseId }) }),
   getUpdateStatus: (refresh = false) =>
     request<UpdateStatus>(`/api/system/update${qs({ refresh: refresh || undefined })}`),
   startUpdate: () => request<{ job: UpdateJob }>("/api/system/update", { method: "POST" }),

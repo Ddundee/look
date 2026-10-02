@@ -386,14 +386,14 @@ def test_deadline_completion_migration_is_additive(db):
         session.commit()
     before = snapshot(db, BASELINE_TABLES)
 
-    assert migrations.migrate(db) == "0004_event_deadline_completion"
+    with db.begin() as conn:
+        command.upgrade(migrations.alembic_config(conn), "0004_event_deadline_completion")
     assert snapshot(db, BASELINE_TABLES) == before
     with db.connect() as conn:
         row = conn.execute(sa.text(
             "SELECT is_deadline, completed_at, completion_source, external_completed FROM events"
         )).one()
     assert (bool(row[0]), row[1], row[2], row[3]) == (False, None, None, None)
-    migrations.check_drift(db)
 
     migrations.downgrade(db, "0003_calendar_subscriptions")  # nothing checked off: allowed
     cols = {c["name"] for c in sa.inspect(db).get_columns("events")}
@@ -413,3 +413,48 @@ def test_deadline_downgrade_with_checkmarks_needs_explicit_flag(db):
         migrations.downgrade(db, "0003_calendar_subscriptions")
     migrations.downgrade(db, "0003_calendar_subscriptions", allow_data_loss=True)
     assert "completed_at" not in {c["name"] for c in sa.inspect(db).get_columns("events")}
+
+
+
+# ---- 0005: courses and categories -----------------------------------------
+
+
+def test_courses_and_categories_migration_preserves_and_seeds(db):
+    with db.begin() as conn:
+        command.upgrade(migrations.alembic_config(conn), "0004_event_deadline_completion")
+    with Session(db) as session:
+        seed_core(session)  # categories "LeetCode" and "school"
+        seed_new_features(session)  # event category "class"
+        session.commit()
+    with db.begin() as conn:  # a category nobody predefined, and a completed import
+        conn.execute(sa.text("UPDATE tasks SET category = 'VT Hacks' WHERE title = 'Two Sum'"))
+        conn.execute(sa.text("UPDATE events SET is_deadline = true, completed_at = CURRENT_TIMESTAMP, completion_source = 'local'"))
+    before = snapshot(db, BASELINE_TABLES)
+
+    assert migrations.migrate(db) == "0005_courses_and_categories"
+    assert snapshot(db, BASELINE_TABLES) == before  # every task and event untouched
+    with db.connect() as conn:
+        cats = {r[0]: (r[1], r[2], bool(r[3])) for r in conn.execute(sa.text("SELECT key, name, color, is_system FROM categories"))}
+        done = conn.execute(sa.text("SELECT completed_at IS NOT NULL, completion_source FROM events")).one()
+    assert cats["school"] == ("School", "red", True) and cats["class"] == ("Class", "amber", True)
+    assert cats["VT Hacks"][2] is False  # existing custom string adopted, not lost
+    assert {"personal", "LeetCode", "errands", "project", "social", "sports", "work", "appointment", "other"} <= cats.keys()
+    assert done == (True, "local")  # completed assignments stay completed
+    migrations.check_drift(db)
+
+    migrations.downgrade(db, "0004_event_deadline_completion")  # nothing customized: allowed
+    assert not {"categories", "courses", "course_links"} & tables_in(db)
+    assert snapshot(db, BASELINE_TABLES) == before
+
+
+def test_courses_downgrade_with_courses_needs_explicit_flag(db):
+    migrations.migrate(db)
+    with db.begin() as conn:
+        conn.execute(sa.text(
+            "INSERT INTO courses (id, code, code_key, color, style, aliases, archived, created_at, updated_at) "
+            "VALUES ('c1', 'CS 3214', 'CS3214', 'blue', 'soft', '[]', false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+        ))
+    with pytest.raises(RuntimeError, match="allow-data-loss"):
+        migrations.downgrade(db, "0004_event_deadline_completion")
+    migrations.downgrade(db, "0004_event_deadline_completion", allow_data_loss=True)
+    assert "courses" not in tables_in(db)

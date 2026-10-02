@@ -34,7 +34,10 @@ def _client() -> httpx.Client:
 
 @router.get("/version")
 def version() -> dict:
-    return {"revision": get_settings().app_revision or None}
+    settings = get_settings()
+    # timezone: what "today" and event times mean (APP_TIMEZONE); the web UI
+    # uses it for the current-time marker.
+    return {"revision": settings.app_revision or None, "timezone": settings.app_timezone}
 
 
 @router.get("/update")

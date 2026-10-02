@@ -28,6 +28,7 @@ from zoneinfo import ZoneInfo
 
 import icalendar
 
+from app.services.courses import canvas_context
 from app.services.events import build_rule, normalize_rrule
 
 # A deadline with no length (Canvas assignments have DTSTART == DTEND) is
@@ -94,6 +95,9 @@ class ParsedEvent:
     # says nothing, which is every VEVENT and all of Canvas.
     external_completed: Optional[bool] = None
     external_completed_at: Optional[datetime] = None
+    # The source's own grouping (a Canvas course: "canvas.vt.edu/course_123"),
+    # used to link items to a course.
+    external_context: Optional[str] = None
 
     def content_hash(self) -> str:
         """Stable digest of the feed-owned fields, so a re-sync can tell an
@@ -337,6 +341,7 @@ def parse(data: bytes, tz: ZoneInfo, source_name: Optional[str] = None) -> List[
             deadline=deadline,
             external_completed=completed,
             external_completed_at=completed_at,
+            external_context=canvas_context(_text(component, "URL", 2000)),
         )
         raw_rule = _rrule(component, tz)
         if raw_rule:

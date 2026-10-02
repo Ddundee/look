@@ -31,6 +31,7 @@ def list_tasks(
     due_after: Optional[date] = None,
     planned_for_date: Optional[date] = None,
     include_completed: bool = True,
+    undated: bool = False,
     q: Optional[str] = None,
     session: Session = Depends(get_db),
 ):
@@ -47,6 +48,7 @@ def list_tasks(
             due_after=due_after,
             planned_for_date=planned_for_date,
             include_completed=include_completed,
+            undated=undated,
         )
     read = [tasks_service.serialize_task(t) for t in tasks]
     return TaskListResponse(tasks=read, count=len(read))

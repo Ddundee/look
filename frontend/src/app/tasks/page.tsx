@@ -7,7 +7,8 @@ import { api } from "@/lib/api";
 import { notifyTasksChanged } from "@/lib/events";
 import { PRIORITY_LABEL, STATUS_LABEL } from "@/lib/format";
 import { useTaskListState } from "@/lib/useTasks";
-import { isTaskDone, SEED_CATEGORIES, type TaskPriority, type TaskStatus } from "@/lib/types";
+import { activeCategories, useCatalog } from "@/lib/catalog";
+import { isTaskDone, type TaskPriority, type TaskStatus } from "@/lib/types";
 import { BUTTON_GHOST_SM, BUTTON_PRIMARY, FIELD } from "@/lib/ui";
 import { EmptyState, ErrorState, Page, PageHeader, Panel, TaskList, TaskListSkeleton } from "@/components/PageParts";
 import TaskEditModal from "@/components/TaskEditModal";
@@ -28,7 +29,10 @@ function AllTasksView() {
   const [category, setCategory] = useState<string>("");
   const [priority, setPriority] = useState<string>("");
   const [search, setSearch] = useState("");
+  // ?undated=1 (from "N more without a due date"): only tasks with no due date.
+  const [undated, setUndated] = useState(() => params.get("undated") === "1");
   const [creating, setCreating] = useState(false);
+  const catalog = useCatalog();
 
   const { tasks, handleUpdated, handleDeleted, loading, error } = useTaskListState(
     () =>
@@ -38,16 +42,18 @@ function AllTasksView() {
           category: category || undefined,
           priority: priority || undefined,
           q: search || undefined,
+          undated: undated || undefined,
           include_completed: true,
         })
-        .then((r) => r.tasks),
-    [status, category, priority, search]
+        // Search goes through a different endpoint; apply "no due date" here too.
+        .then((r) => (undated ? r.tasks.filter((t) => !t.due_date) : r.tasks)),
+    [status, category, priority, search, undated]
   );
 
   // Array.sort is stable, so this only moves done tasks after not-done ones
   // without disturbing whatever order the API returned within each group.
   const sortedTasks = [...tasks].sort((a, b) => Number(isTaskDone(a)) - Number(isTaskDone(b)));
-  const filtered = !!(status || category || priority || search);
+  const filtered = !!(status || category || priority || search || undated);
   const openCount = tasks.filter((t) => !isTaskDone(t)).length;
 
   function clearFilters() {
@@ -55,6 +61,7 @@ function AllTasksView() {
     setCategory("");
     setPriority("");
     setSearch("");
+    setUndated(false);
   }
 
   return (
@@ -127,12 +134,16 @@ function AllTasksView() {
           className={SELECT}
         >
           <option value="">Any category</option>
-          {SEED_CATEGORIES.map((c) => (
-            <option key={c} value={c}>
-              {c}
+          {activeCategories(catalog).map((c) => (
+            <option key={c.key} value={c.key}>
+              {c.name}
             </option>
           ))}
         </select>
+        <label className={`inline-flex h-9 items-center gap-2 rounded-lg border px-3 text-sm ${undated ? "border-accent bg-accent-soft text-accent-text" : "border-line text-fg-muted"}`}>
+          <input type="checkbox" checked={undated} onChange={(e) => setUndated(e.target.checked)} className="accent-[var(--accent)]" />
+          No due date
+        </label>
         {filtered && (
           <button onClick={clearFilters} className={`h-9 ${BUTTON_GHOST_SM}`}>
             <XIcon className="h-3.5 w-3.5" aria-hidden />

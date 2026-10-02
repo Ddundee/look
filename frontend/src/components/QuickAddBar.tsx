@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CalendarBlankIcon, CircleNotchIcon, FlagIcon, HashIcon, PlusIcon } from "@phosphor-icons/react";
+import { CalendarBlankIcon, CircleNotchIcon, FlagIcon, PlusIcon } from "@phosphor-icons/react";
 import { api } from "@/lib/api";
-import { categoryHue, PRIORITY_LABEL, PRIORITY_TEXT, relativeDueLabel } from "@/lib/format";
+import { PRIORITY_LABEL, PRIORITY_TEXT, relativeDueLabel } from "@/lib/format";
+import { CategoryTag } from "./look/Look";
 import { parseQuickAdd } from "@/lib/quickAdd";
 import { toast, toastError } from "@/lib/toast";
 import type { Task } from "@/lib/types";
@@ -123,8 +124,7 @@ export default function QuickAddBar({ onCreated }: { onCreated?: (task: Task) =>
               )}
               {parsed.category && (
                 <span className={CHIP}>
-                  <HashIcon weight="bold" className={`h-3.5 w-3.5 ${categoryHue(parsed.category)}`} aria-hidden />
-                  {parsed.category}
+                  <CategoryTag category={parsed.category} />
                 </span>
               )}
               <span className="text-xs text-fg-faint">as &ldquo;{parsed.title}&rdquo;</span>

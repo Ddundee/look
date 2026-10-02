@@ -202,6 +202,9 @@ export interface CalendarEvent {
   completed: boolean;
   completed_at: string | null;
   completion_source: CompletionSource;
+  course_id: string | null;
+  /** auto: Look matched it; manual: you chose (never overwritten). */
+  course_source: "auto" | "manual" | null;
 }
 
 /** local: checked off in Look. external: the source calendar said so. */
@@ -236,6 +239,8 @@ export interface Occurrence {
   completed: boolean;
   completed_at: string | null;
   completion_source: CompletionSource;
+  course_id: string | null;
+  course: CourseSummary | null;
 }
 
 export interface EventWithContext {
@@ -427,4 +432,58 @@ export interface CalendarSyncResult extends SyncCounts {
   error: string | null;
   warnings: string[];
   subscription: CalendarSubscription | null;
+}
+
+// ---- Courses, categories, planning -------------------------------------------
+
+/** Colors and styles are palette keys (lib/palette.ts), never CSS. */
+export interface Category {
+  id: string;
+  /** What tasks and events store as their `category`. */
+  key: string;
+  name: string;
+  color: string;
+  style: string;
+  is_system: boolean;
+  archived: boolean;
+}
+
+export interface CourseSummary {
+  id: string;
+  code: string;
+  name: string | null;
+  color: string;
+  style: string;
+}
+
+export interface Course extends CourseSummary {
+  aliases: string[];
+  archived: boolean;
+  /** Remembered Canvas courses, e.g. "canvas.vt.edu/course_123". */
+  canvas_contexts: string[];
+  event_count: number;
+}
+
+/** A task or an imported assignment: one list of things to do. */
+export interface WorkItem {
+  kind: "task" | "assignment";
+  id: string;
+  title: string;
+  done: boolean;
+  due_date: string | null;
+  due_at: string | null;
+  priority: TaskPriority | null;
+  category: string;
+  course: CourseSummary | null;
+  task: Task | null;
+  occurrence: Occurrence | null;
+}
+
+export interface WorkPlan {
+  date: string;
+  overdue: WorkItem[];
+  today: WorkItem[];
+  undated: WorkItem[];
+  undated_total: number;
+  remaining: number;
 }

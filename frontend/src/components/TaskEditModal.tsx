@@ -6,7 +6,8 @@ import { api } from "@/lib/api";
 import { notifyTasksChanged } from "@/lib/events";
 import { PRIORITY_LABEL, PRIORITY_TEXT, STATUS_LABEL } from "@/lib/format";
 import { toast } from "@/lib/toast";
-import { SEED_CATEGORIES, type Task, type TaskPriority, type TaskStatus } from "@/lib/types";
+import { activeCategories, useCatalog } from "@/lib/catalog";
+import type { Task, TaskPriority, TaskStatus } from "@/lib/types";
 import { BUTTON_PRIMARY, BUTTON_SECONDARY, FIELD as FIELD_BASE, LABEL } from "@/lib/ui";
 import Dialog from "./Dialog";
 
@@ -23,6 +24,7 @@ const FIELD = `mt-1.5 h-10 w-full ${FIELD_BASE}`;
 const AREA = `mt-1.5 w-full py-2 leading-relaxed ${FIELD_BASE}`;
 
 export default function TaskEditModal({ task, onClose, onSaved }: Props) {
+  const catalog = useCatalog();
   const [title, setTitle] = useState(task?.title ?? "");
   const [description, setDescription] = useState(task?.description ?? "");
   const [status, setStatus] = useState<TaskStatus>(task?.status ?? "inbox");
@@ -165,8 +167,8 @@ export default function TaskEditModal({ task, onClose, onSaved }: Props) {
             className={FIELD}
           />
           <datalist id="categories">
-            {SEED_CATEGORIES.map((c) => (
-              <option key={c} value={c} />
+            {activeCategories(catalog).map((c) => (
+              <option key={c.key} value={c.key} label={c.name} />
             ))}
           </datalist>
         </label>

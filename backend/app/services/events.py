@@ -16,7 +16,9 @@ from sqlmodel import Session, col, select
 
 from app.models.calendars import CalendarSubscription
 from app.models.events import Event, EventOverride
+from app.models.planning import Course
 from app.schemas import (
+    CourseSummary,
     EventCreate,
     EventRead,
     EventUpdate,
@@ -24,6 +26,8 @@ from app.schemas import (
     Occurrence,
     OccurrenceEdit,
 )
+from app.services import categories as categories_service
+from app.services import courses as courses_service
 from app.utils import local_today, utcnow
 
 MAX_RANGE_DAYS = 366
@@ -124,6 +128,7 @@ def _occ(
         overridden=override is not None,
         cancelled=bool(override is not None and override.cancelled) or event.external_status is not None,
         read_only=event.subscription_id is not None,
+        course_id=event.course_id,
         deadline=event.is_deadline,
         completed=event.completed_at is not None,
         completed_at=event.completed_at,
@@ -217,6 +222,8 @@ def set_completed(session: Session, event: Event, completed: bool) -> Event:
 
 def create_event(session: Session, payload: EventCreate, source: str = "manual") -> Event:
     event = draft_event(payload, source)
+    categories_service.ensure(session, event.category)
+    courses_service.apply(session, event)  # "CS 3214 lecture" -> CS 3214, if that course exists
     session.add(event)
     session.commit()
     session.refresh(event)
@@ -273,6 +280,10 @@ def update_event(session: Session, event: Event, changes: EventUpdate) -> Tuple[
 
     for field_name, value in data.items():
         setattr(event, field_name, value)
+    if "category" in data:
+        categories_service.ensure(session, event.category)
+    if "title" in data:
+        courses_service.apply(session, event)
     event.updated_at = utcnow()
     session.add(event)
     dropped = _prune_overrides(session, event) if {"start_at", "rrule", "exdates"} & data.keys() else []
@@ -422,6 +433,7 @@ def occurrences(
 
 
 def _name_sources(session: Session, occs: List[Occurrence]) -> None:
+    attach_courses(session, occs)
     ids = {o.subscription_id for o in occs if o.subscription_id}
     if not ids:
         return
@@ -433,6 +445,17 @@ def _name_sources(session: Session, occs: List[Occurrence]) -> None:
     for occ in occs:
         if occ.subscription_id:
             occ.subscription_name = names.get(occ.subscription_id)
+
+
+def attach_courses(session: Session, occs: List[Occurrence]) -> None:
+    """Fill in each occurrence's course (code, name, color, style)."""
+    ids = {o.course_id for o in occs if o.course_id}
+    if not ids:
+        return
+    found = {c.id: CourseSummary.model_validate(c) for c in session.exec(select(Course).where(col(Course.id).in_(ids))).all()}
+    for occ in occs:
+        if occ.course_id and not (course := found.get(occ.course_id)) is None:
+            occ.course = course
 
 
 def preview(session: Session, event: Event, count: int = 5) -> List[Occurrence]:

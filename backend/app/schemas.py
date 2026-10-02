@@ -1,5 +1,5 @@
 from datetime import date, datetime, time, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
 
@@ -382,6 +382,8 @@ class EventRead(BaseModel):
     is_deadline: bool = False
     completed_at: Optional[datetime] = None
     completion_source: Optional[str] = None  # "local" | "external"
+    course_id: Optional[str] = None
+    course_source: Optional[str] = None  # "auto" | "manual"
 
     @computed_field
     @property
@@ -418,6 +420,9 @@ class Occurrence(BaseModel):
     completed: bool = False
     completed_at: Optional[datetime] = None
     completion_source: Optional[str] = None
+    # The class it belongs to, if any (see app.services.courses).
+    course_id: Optional[str] = None
+    course: Optional["CourseSummary"] = None
 
 
 class EventWithContext(BaseModel):
@@ -712,3 +717,113 @@ class CalendarSubscriptionList(BaseModel):
 class CalendarSubscriptionDeleted(BaseModel):
     events_kept: int
     events_deleted: int
+
+
+# ---------------------------------------------------------------------------
+# Courses and categories (presentation keys come from fixed sets: see
+# app.models.planning COLORS/STYLES; no CSS is ever stored)
+# ---------------------------------------------------------------------------
+
+ColorKey = Literal["red", "orange", "amber", "yellow", "lime", "green", "teal", "cyan", "sky", "blue", "indigo", "violet", "pink", "slate"]
+StyleKey = Literal["solid", "soft", "outline", "striped", "glass"]
+
+
+class CategoryCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=50)
+    color: Optional[ColorKey] = None
+    style: Optional[StyleKey] = None
+
+
+class CategoryUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=50)
+    color: Optional[ColorKey] = None
+    style: Optional[StyleKey] = None
+    archived: Optional[bool] = None
+
+
+class CategoryRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    key: str  # what tasks/events store in their `category`
+    name: str
+    color: str
+    style: str
+    is_system: bool
+    archived: bool
+
+
+class CourseCreate(BaseModel):
+    code: str = Field(min_length=2, max_length=40)
+    name: Optional[str] = Field(default=None, max_length=120)
+    color: Optional[ColorKey] = None
+    style: Optional[StyleKey] = None
+    aliases: List[str] = Field(default_factory=list)
+
+
+class CourseUpdate(BaseModel):
+    code: Optional[str] = Field(default=None, min_length=2, max_length=40)
+    name: Optional[str] = Field(default=None, max_length=120)
+    color: Optional[ColorKey] = None
+    style: Optional[StyleKey] = None
+    aliases: Optional[List[str]] = None
+    archived: Optional[bool] = None
+
+
+class CourseSummary(BaseModel):
+    """What an event or assignment carries about its course."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    code: str
+    name: Optional[str]
+    color: str
+    style: str
+
+
+class CourseRead(CourseSummary):
+    aliases: List[str]
+    archived: bool
+    canvas_contexts: List[str] = Field(default_factory=list)
+    event_count: int = 0
+
+
+class EventCourseSet(BaseModel):
+    course_id: Optional[str] = None  # null = this event has no course
+
+
+Occurrence.model_rebuild()
+
+
+# ---------------------------------------------------------------------------
+# Planning: tasks and imported assignments as one list of things to do
+# ---------------------------------------------------------------------------
+
+
+class WorkItem(BaseModel):
+    """Something to do: a Task, or an imported assignment (an Event with
+    deadline semantics). Exactly one of `task` / `occurrence` is set; they
+    are the records themselves, not copies, so completing one goes to the
+    Task API or the event's complete/uncomplete."""
+
+    kind: Literal["task", "assignment"]
+    id: str  # task id or event id
+    title: str
+    done: bool
+    due_date: Optional[date] = None
+    due_at: Optional[datetime] = None  # when a time is known (local)
+    priority: Optional[TaskPriority] = None  # tasks only
+    category: str
+    course: Optional[CourseSummary] = None
+    task: Optional[TaskRead] = None
+    occurrence: Optional[Occurrence] = None
+
+
+class WorkPlan(BaseModel):
+    date: date
+    overdue: List[WorkItem]
+    today: List[WorkItem]  # due or planned today, done ones included
+    undated: List[WorkItem]  # open tasks with no due date, most important first (top few)
+    undated_total: int
+    remaining: int  # not-done items in overdue + today

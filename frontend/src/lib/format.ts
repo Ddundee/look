@@ -94,16 +94,3 @@ export const STATUS_STYLES: Record<TaskStatus, string> = {
   cancelled: "bg-surface-2 text-fg-faint line-through",
 };
 
-// Categories are told apart by a small colored hash glyph, with the name
-// always written out beside it so color is never the only signal.
-const CATEGORY_HUES: Record<string, string> = {
-  LeetCode: "text-amber-500",
-  school: "text-rose-500",
-  project: "text-violet-500",
-  personal: "text-emerald-500",
-  errands: "text-lime-600 dark:text-lime-500",
-};
-
-export function categoryHue(category: string): string {
-  return CATEGORY_HUES[category] || "text-fg-faint";
-}
