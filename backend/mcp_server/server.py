@@ -39,6 +39,7 @@ from app.schemas import (
     CategoryUpdate,
     CourseCreate,
     CourseUpdate,
+    LeetCodeSubmissionImport,
     CalendarSubscriptionCreate,
     CalendarSubscriptionUpdate,
     LeetCodeAttemptCreate,
@@ -978,7 +979,7 @@ def log_leetcode_attempt(
     topics: Optional[List[str]] = None,
     solved: bool = True,
     solved_independently: Optional[bool] = None,
-    hint_used: bool = False,
+    hint_used: Optional[bool] = False,
     duration_minutes: Optional[int] = None,
     language: Optional[str] = None,
     confidence: Optional[int] = None,
@@ -996,8 +997,10 @@ def log_leetcode_attempt(
     knowledge of LeetCode, along with its main topics/patterns (e.g.
     "Prefix Sum", "Sliding Window", "Graphs", "DP"), which are merged into
     the problem. solved_independently defaults to solved without a hint.
-    confidence is 1 (very weak) to 5 (very strong). attempted_at is local
-    'YYYY-MM-DDTHH:MM', default now.
+    Pass hint_used=null when it isn't known (never guess false). confidence
+    is 1 (very weak) to 5 (very strong). attempted_at is local
+    'YYYY-MM-DDTHH:MM', default now. notes are only the user's own words;
+    to import past LeetCode submissions use import_leetcode_submissions.
 
     This is the record of practice; a planned "do 2 LeetCodes" stays a
     task. Returns the attempt and updated progress (today vs goal, streak,
@@ -1021,6 +1024,24 @@ def log_leetcode_attempt(
             "problem_created": created,
             "progress": leetcode_service.stats(session).model_dump(mode="json"),
         }
+
+
+@mcp.tool()
+def import_leetcode_submissions(submissions: List[LeetCodeSubmissionImport]) -> dict:
+    """Import past LeetCode submissions, e.g. from the user's lc-solutions
+    submission_history.json (fields id, title, titleSlug, statusDisplay,
+    lang, timestamp in epoch ms). For each give submission_id (the id),
+    problem_number, title and difficulty (look these up from the title, as
+    for log_leetcode_attempt), topics, status (statusDisplay; 'Accepted'
+    counts as solved), submitted_at (ISO with timezone, from the timestamp)
+    and language. Re-importing is safe: submissions already imported are
+    skipped. Don't put any import details in notes; hint use, independence,
+    duration and confidence are recorded as unknown."""
+    with _session() as session:
+        try:
+            return leetcode_service.import_submissions(session, submissions).model_dump(mode="json")
+        except ValueError as exc:
+            return _error(exc)
 
 
 @mcp.tool()

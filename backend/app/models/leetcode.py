@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import Column, JSON
+from sqlalchemy import Column, JSON, UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 from app.models.enums import LeetCodeDifficulty
@@ -36,6 +36,8 @@ class LeetCodeAttempt(SQLModel, table=True):
     like "do 2 LeetCodes" stay ordinary tasks; this is the record."""
 
     __tablename__ = "leetcode_attempts"
+    # An imported submission is recorded once per source.
+    __table_args__ = (UniqueConstraint("source", "external_id", name="uq_leetcode_attempts_source_external"),)
 
     id: str = Field(default_factory=_uuid, primary_key=True)
     problem_id: str = Field(foreign_key="leetcode_problems.id", index=True)
@@ -43,14 +45,19 @@ class LeetCodeAttempt(SQLModel, table=True):
     # the calendar day it counts toward for streaks and goals.
     attempted_at: datetime = Field(index=True)
     solved: bool = True
-    solved_independently: bool = False
-    hint_used: bool = False
+    # None = unknown (e.g. imported from submission history, which doesn't
+    # say), never a guessed False. Rates only count known values.
+    solved_independently: Optional[bool] = None
+    hint_used: Optional[bool] = None
     duration_minutes: Optional[int] = None
     language: Optional[str] = None
     confidence: Optional[int] = None  # 1 very weak .. 5 very strong
-    notes: Optional[str] = None
-    # "mcp" when logged through an AI client, "manual" from the web UI.
+    notes: Optional[str] = None  # the user's own words only, never import bookkeeping
+    # "manual" from the web UI, "mcp" when logged through an AI client,
+    # "leetcode" when imported from LeetCode submission history.
     source: str = Field(default="manual")
+    # For imports: the LeetCode submission id (its URL is derived from it).
+    external_id: Optional[str] = None
     created_at: datetime = Field(default_factory=utcnow)
 
 

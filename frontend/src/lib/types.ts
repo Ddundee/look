@@ -330,13 +330,18 @@ export interface LeetCodeAttempt {
   problem_id: string;
   attempted_at: string;
   solved: boolean;
-  solved_independently: boolean;
-  hint_used: boolean;
+  /** null = unknown (imported history doesn't say). */
+  solved_independently: boolean | null;
+  hint_used: boolean | null;
   duration_minutes: number | null;
   language: string | null;
   confidence: number | null;
   notes: string | null;
+  /** manual | mcp | leetcode (imported submission history) */
   source: string;
+  external_id: string | null;
+  /** The LeetCode submission, for imported attempts. */
+  external_url: string | null;
   created_at: string;
   problem: LeetCodeProblem;
 }
@@ -371,8 +376,9 @@ export interface LeetCodeTopicStat {
   attempts: number;
   recent_attempts: number;
   recent_solve_rate: number;
-  recent_independent_rate: number;
-  recent_hint_rate: number;
+  /** Over recent attempts where it's known; null when none record it. */
+  recent_independent_rate: number | null;
+  recent_hint_rate: number | null;
   recent_avg_confidence: number | null;
   weakness: number | null;
   reasons: string[];
@@ -392,7 +398,7 @@ export interface LeetCodeAttemptPayload {
   topics?: string[];
   solved?: boolean;
   solved_independently?: boolean | null;
-  hint_used?: boolean;
+  hint_used?: boolean | null;
   duration_minutes?: number | null;
   language?: string | null;
   confidence?: number | null;

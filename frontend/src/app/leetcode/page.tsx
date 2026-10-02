@@ -46,7 +46,8 @@ function Stat({ label, value, sub, children }: { label: string; value: React.Rea
 function outcome(a: LeetCodeAttempt): { label: string; className: string } {
   if (!a.solved) return { label: "Not solved", className: "bg-danger-soft text-danger" };
   if (a.hint_used) return { label: "Solved with hint", className: "bg-warn-soft text-warn" };
-  return { label: a.solved_independently ? "Solved" : "Solved with help", className: "bg-accent-soft text-accent-text" };
+  // false = needed help; null = not recorded (imported history), shown as plain "Solved".
+  return { label: a.solved_independently === false ? "Solved with help" : "Solved", className: "bg-accent-soft text-accent-text" };
 }
 
 function AttemptRow({ attempt, index, onDeleted }: { attempt: LeetCodeAttempt; index: number; onDeleted: () => void }) {
@@ -98,6 +99,14 @@ function AttemptRow({ attempt, index, onDeleted }: { attempt: LeetCodeAttempt; i
           <span>{relativeDueLabel(day) === formatDate(day) ? formatDate(day) : relativeDueLabel(day)}</span>
           {attempt.duration_minutes !== null && <span className="font-mono tabular-nums">{attempt.duration_minutes}m</span>}
           {attempt.language && <span>{attempt.language}</span>}
+          {attempt.source === "leetcode" &&
+            (attempt.external_url ? (
+              <a href={attempt.external_url} target="_blank" rel="noopener noreferrer" className="text-fg-faint hover:underline hover:underline-offset-4" title="Imported from your LeetCode submission history">
+                Imported
+              </a>
+            ) : (
+              <span className="text-fg-faint">Imported</span>
+            ))}
           {attempt.confidence !== null && (
             <span title={CONFIDENCE_LABEL[attempt.confidence]}>
               confidence <span className="font-mono tabular-nums">{attempt.confidence}/5</span>

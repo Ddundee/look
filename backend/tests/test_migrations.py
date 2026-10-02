@@ -431,7 +431,8 @@ def test_courses_and_categories_migration_preserves_and_seeds(db):
         conn.execute(sa.text("UPDATE events SET is_deadline = true, completed_at = CURRENT_TIMESTAMP, completion_source = 'local'"))
     before = snapshot(db, BASELINE_TABLES)
 
-    assert migrations.migrate(db) == "0005_courses_and_categories"
+    with db.begin() as conn:
+        command.upgrade(migrations.alembic_config(conn), "0005_courses_and_categories")
     assert snapshot(db, BASELINE_TABLES) == before  # every task and event untouched
     with db.connect() as conn:
         cats = {r[0]: (r[1], r[2], bool(r[3])) for r in conn.execute(sa.text("SELECT key, name, color, is_system FROM categories"))}
@@ -440,7 +441,6 @@ def test_courses_and_categories_migration_preserves_and_seeds(db):
     assert cats["VT Hacks"][2] is False  # existing custom string adopted, not lost
     assert {"personal", "LeetCode", "errands", "project", "social", "sports", "work", "appointment", "other"} <= cats.keys()
     assert done == (True, "local")  # completed assignments stay completed
-    migrations.check_drift(db)
 
     migrations.downgrade(db, "0004_event_deadline_completion")  # nothing customized: allowed
     assert not {"categories", "courses", "course_links"} & tables_in(db)
@@ -458,3 +458,55 @@ def test_courses_downgrade_with_courses_needs_explicit_flag(db):
         migrations.downgrade(db, "0004_event_deadline_completion")
     migrations.downgrade(db, "0004_event_deadline_completion", allow_data_loss=True)
     assert "courses" not in tables_in(db)
+# ---- leetcode import metadata ---------------------------------------------
+
+OLD_IMPORT_NOTE = (
+    "Imported from Ddundee/lc-solutions submission_history.json. Accepted LeetCode submission {sid}: "
+    "https://leetcode.com/submissions/detail/{sid}/. Original timestamp: 2026-10-01T05:41:09.000Z. "
+    "Hint usage and independent solving are UNKNOWN (false fields are placeholders, not assessments); "
+    "solve duration and confidence not recorded."
+)
+
+
+def test_leetcode_import_notes_are_cleaned_and_unknowns_restored(db):
+    with db.begin() as conn:
+        command.upgrade(migrations.alembic_config(conn), "0005_courses_and_categories")
+    rows = [
+        ("a1", OLD_IMPORT_NOTE.format(sid="111"), "mcp"),  # pure boilerplate
+        ("a2", OLD_IMPORT_NOTE.format(sid="222") + " Off-by-one on the window again.", "mcp"),  # + user words
+        ("a3", "Took 3 tries. Imported from Ddundee/lc-solutions submission_history.json. later", "manual"),  # not a prefix
+        ("a4", "Solid. Used two pointers.", "manual"),  # unrelated
+        ("a5", OLD_IMPORT_NOTE.format(sid="111"), "mcp"),  # the same submission imported twice
+        ("a6", None, "manual"),
+    ]
+    with db.begin() as conn:
+        conn.execute(sa.text(
+            "INSERT INTO leetcode_problems (id, number, title, difficulty, topics, created_at, updated_at) "
+            "VALUES ('p1', 560, 'Subarray Sum Equals K', 'medium', '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+        ))
+        for aid, notes, source in rows:
+            conn.execute(sa.text(
+                "INSERT INTO leetcode_attempts (id, problem_id, attempted_at, solved, solved_independently, hint_used, "
+                "notes, source, created_at) VALUES (:id, 'p1', CURRENT_TIMESTAMP, true, :ind, false, :notes, :source, "
+                "CURRENT_TIMESTAMP)"
+            ), {"id": aid, "notes": notes, "source": source, "ind": source == "manual"})
+
+    assert migrations.migrate(db) == migrations.head_revision()
+    with db.connect() as conn:
+        got = {r[0]: r[1:] for r in conn.execute(sa.text(
+            "SELECT id, notes, source, external_id, hint_used, solved_independently FROM leetcode_attempts"
+        ))}
+    norm = lambda r: (r[0], r[1], r[2], None if r[3] is None else bool(r[3]), None if r[4] is None else bool(r[4]))  # noqa: E731
+    assert norm(got["a1"]) == (None, "leetcode", "111", None, None)
+    assert norm(got["a2"]) == ("Off-by-one on the window again.", "leetcode", "222", None, None)
+    assert norm(got["a3"]) == (rows[2][1], "manual", None, False, True)  # untouched
+    assert norm(got["a4"]) == ("Solid. Used two pointers.", "manual", None, False, True)
+    assert norm(got["a5"]) == (None, "mcp", None, None, None)  # cleaned; id already taken by a1
+    assert norm(got["a6"]) == (None, "manual", None, False, True)
+    migrations.check_drift(db)
+
+    with pytest.raises(RuntimeError, match="allow-data-loss"):
+        migrations.downgrade(db, "0005_courses_and_categories")
+    migrations.downgrade(db, "0005_courses_and_categories", allow_data_loss=True)
+    with db.connect() as conn:
+        assert conn.execute(sa.text("SELECT COUNT(*) FROM leetcode_attempts WHERE hint_used IS NULL")).scalar() == 0

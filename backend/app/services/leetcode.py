@@ -15,15 +15,24 @@ Definitions (also in docs/LEETCODE.md):
 * Topic weakness: over each topic's most recent attempts, the mean of
   (1 - solve rate), (1 - independent rate), hint rate and
   (5 - avg confidence) / 4. Simple and explainable, not a science.
+* Hint use and independence can be unknown (None): history imported from
+  LeetCode doesn't say. Unknown is never counted as "no": hint and
+  independence rates are over the attempts where they're known, and a
+  factor with nothing known is left out of a topic's weakness.
+* Imported attempts (source "leetcode") keep their LeetCode submission id
+  in external_id, which also prevents importing one twice. Notes are only
+  ever the user's own words.
 """
 
 import re
 from collections import defaultdict
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
+from zoneinfo import ZoneInfo
 
 from sqlmodel import Session, col, select
 
+from app.config import get_settings
 from app.models.enums import LeetCodeDifficulty
 from app.models.leetcode import LeetCodeAttempt, LeetCodeGoals, LeetCodeProblem
 from app.schemas import (
@@ -32,6 +41,8 @@ from app.schemas import (
     LeetCodeAttemptRead,
     LeetCodeGoalsRead,
     LeetCodeGoalsSet,
+    LeetCodeImportResult,
+    LeetCodeSubmissionImport,
     LeetCodeProblemCreate,
     LeetCodeProblemRead,
     LeetCodeProblemSummary,
@@ -136,33 +147,51 @@ def update_problem(session: Session, problem: LeetCodeProblem, changes: LeetCode
 # ---- attempts --------------------------------------------------------------
 
 
-def log_attempt(
-    session: Session, payload: LeetCodeAttemptCreate, source: str = "manual"
-) -> Tuple[LeetCodeAttempt, LeetCodeProblem, bool]:
-    """Record an attempt; returns (attempt, problem, problem_was_created)."""
-    problem = get_problem_by_number(session, payload.problem_number)
+# The sentences the old lc-solutions importer wrote into notes (see
+# migration 0006_leetcode_import_metadata, which cleaned existing ones).
+# Only recognized when a note starts with them; the rest is kept.
+_IMPORT_NOTE = re.compile(
+    r"^\s*Imported from \S+ submission_history\.json\.\s*"
+    r"(?:(?P<status>[A-Za-z][A-Za-z ]*?) LeetCode submission (?P<id>\d+)"
+    r"(?::\s*https://leetcode\.com/submissions/detail/(?P=id)/?)?\.\s*)?"
+    r"(?:Original timestamp:\s*(?P<ts>\d{4}-\d{2}-\d{2}T[\d:.]+Z?)\.\s*)?"
+    r"(?P<unknown>Hint usage and independent solving are UNKNOWN \(false fields are placeholders, not assessments\)"
+    r"(?:;[^.]*)?\.\s*)?"
+)
+
+
+def clean_notes(raw: Optional[str]) -> Optional[str]:
+    """The user's own words: import bookkeeping removed, blank -> None."""
+    text = (raw or "").strip()
+    m = _IMPORT_NOTE.match(text)
+    if m:
+        text = text[m.end():].strip()
+    return text or None
+
+
+def _upsert_problem(
+    session: Session, number: int, title: Optional[str], difficulty: Optional[LeetCodeDifficulty], topics: Iterable[str]
+) -> Tuple[LeetCodeProblem, bool]:
+    """The tracked problem for `number`, created or updated; (problem, created)."""
+    problem = get_problem_by_number(session, number)
     created = problem is None
-    topics = normalize_topics(payload.topics)
+    topics = normalize_topics(topics)
     if problem is None:
-        if not payload.title or payload.difficulty is None:
+        if not title or difficulty is None:
             raise ValueError(
-                f"Problem {payload.problem_number} isn't tracked yet: give its title and difficulty "
-                "the first time you log it."
+                f"Problem {number} isn't tracked yet: give its title and difficulty the first time you log it."
             )
-        slug = slugify(payload.title)
-        problem = LeetCodeProblem(
-            number=payload.problem_number, title=payload.title, difficulty=payload.difficulty,
-            topics=topics, slug=slug, url=_url(slug),
-        )
+        slug = slugify(title)
+        problem = LeetCodeProblem(number=number, title=title, difficulty=difficulty, topics=topics, slug=slug, url=_url(slug))
     else:
         # Later details win for title/difficulty; topics accumulate.
         changed = False
-        if payload.title and payload.title != problem.title:
-            problem.title, problem.slug = payload.title, slugify(payload.title)
+        if title and title != problem.title:
+            problem.title, problem.slug = title, slugify(title)
             problem.url = _url(problem.slug)
             changed = True
-        if payload.difficulty is not None and payload.difficulty != problem.difficulty:
-            problem.difficulty, changed = payload.difficulty, True
+        if difficulty is not None and difficulty != problem.difficulty:
+            problem.difficulty, changed = difficulty, True
         merged = normalize_topics([*(problem.topics or []), *topics])
         if merged != (problem.topics or []):
             problem.topics, changed = merged, True
@@ -170,12 +199,23 @@ def log_attempt(
             problem.updated_at = utcnow()
     session.add(problem)
     session.flush()
+    return problem, created
 
-    independent = (
-        payload.solved_independently
-        if payload.solved_independently is not None
-        else payload.solved and not payload.hint_used
-    )
+
+def log_attempt(
+    session: Session, payload: LeetCodeAttemptCreate, source: str = "manual"
+) -> Tuple[LeetCodeAttempt, LeetCodeProblem, bool]:
+    """Record an attempt; returns (attempt, problem, problem_was_created)."""
+    problem, created = _upsert_problem(session, payload.problem_number, payload.title, payload.difficulty, payload.topics)
+
+    # Independence follows from the hint unless given; unknown hint use
+    # means unknown independence, not "no".
+    if payload.solved_independently is not None:
+        independent: Optional[bool] = payload.solved_independently
+    elif payload.hint_used is None:
+        independent = None
+    else:
+        independent = payload.solved and not payload.hint_used
     attempt = LeetCodeAttempt(
         problem_id=problem.id,
         attempted_at=payload.attempted_at or local_now(),
@@ -185,7 +225,7 @@ def log_attempt(
         duration_minutes=payload.duration_minutes,
         language=(payload.language or "").strip() or None,
         confidence=payload.confidence,
-        notes=(payload.notes or "").strip() or None,
+        notes=clean_notes(payload.notes),
         source=source,
     )
     session.add(attempt)
@@ -193,6 +233,52 @@ def log_attempt(
     session.refresh(attempt)
     session.refresh(problem)
     return attempt, problem, created
+
+
+IMPORT_SOURCE = "leetcode"
+
+
+def _local(at: datetime) -> datetime:
+    """A submission time as local wall-clock time (attempts are local)."""
+    if at.tzinfo is None:
+        at = at.replace(tzinfo=timezone.utc)
+    return at.astimezone(ZoneInfo(get_settings().app_timezone)).replace(tzinfo=None, microsecond=0)
+
+
+def import_submissions(session: Session, items: Sequence[LeetCodeSubmissionImport]) -> LeetCodeImportResult:
+    """Import LeetCode submissions (e.g. lc-solutions' submission_history
+    .json) as attempts. Each is identified by its submission id, so
+    importing the same history again adds nothing. What history doesn't
+    record stays unknown: hint use and independence are None, duration,
+    confidence and notes empty. Commits once, all or nothing."""
+    known = set(
+        session.exec(
+            select(LeetCodeAttempt.external_id).where(
+                LeetCodeAttempt.source == IMPORT_SOURCE, col(LeetCodeAttempt.external_id).is_not(None)
+            )
+        ).all()
+    )
+    created = duplicates = problems_created = 0
+    for item in items:
+        if item.submission_id in known:
+            duplicates += 1
+            continue
+        known.add(item.submission_id)
+        problem, new_problem = _upsert_problem(session, item.problem_number, item.title, item.difficulty, item.topics)
+        problems_created += new_problem
+        session.add(LeetCodeAttempt(
+            problem_id=problem.id,
+            attempted_at=_local(item.submitted_at),
+            solved=item.status.strip().lower() == "accepted",
+            hint_used=None,
+            solved_independently=None,
+            language=(item.language or "").strip() or None,
+            source=IMPORT_SOURCE,
+            external_id=item.submission_id,
+        ))
+        created += 1
+    session.commit()
+    return LeetCodeImportResult(created=created, duplicates=duplicates, problems_created=problems_created)
 
 
 def get_attempt(session: Session, attempt_id: str) -> Optional[LeetCodeAttempt]:
@@ -361,25 +447,32 @@ def _topic_rows(attempts: Sequence[LeetCodeAttempt], problems: Dict[str, LeetCod
         recent = history[:TOPIC_RECENT_WINDOW]
         n = len(recent)
         solved = sum(a.solved for a in recent)
-        independent = sum(a.solved_independently for a in recent)
-        hints = sum(a.hint_used for a in recent)
+        # Only attempts that record it count toward these two.
+        hint_known = [a.hint_used for a in recent if a.hint_used is not None]
+        indep_known = [a.solved_independently for a in recent if a.solved_independently is not None]
+        hints, independent = sum(hint_known), sum(indep_known)
         confidences = [a.confidence for a in recent if a.confidence is not None]
         avg_conf = round(sum(confidences) / len(confidences), 1) if confidences else None
         solve_rate = solved / n if n else 0.0
-        independent_rate = independent / n if n else 0.0
-        hint_rate = hints / n if n else 0.0
+        independent_rate = independent / len(indep_known) if indep_known else None
+        hint_rate = hints / len(hint_known) if hint_known else None
 
         weakness = None
         reasons: List[str] = []
         if n >= TOPIC_MIN_ATTEMPTS:
-            factors = [1 - solve_rate, 1 - independent_rate, hint_rate]
+            factors = [1 - solve_rate]
+            if independent_rate is not None:
+                factors.append(1 - independent_rate)
+            if hint_rate is not None:
+                factors.append(hint_rate)
             if avg_conf is not None:
                 factors.append((5 - avg_conf) / 4)
             weakness = round(sum(factors) / len(factors), 2)
             reasons.append(f"solved {solved} of {n} recent attempts")
             if hints:
-                reasons.append(f"used hints on {hints} of {n}")
-            reasons.append(f"solved on your own {independent} of {n}")
+                reasons.append(f"used hints on {hints} of {len(hint_known)}")
+            if indep_known:
+                reasons.append(f"solved on your own {independent} of {len(indep_known)}")
             if avg_conf is not None:
                 reasons.append(f"average confidence {avg_conf}/5")
         else:
@@ -394,8 +487,8 @@ def _topic_rows(attempts: Sequence[LeetCodeAttempt], problems: Dict[str, LeetCod
                 attempts=len(history),
                 recent_attempts=n,
                 recent_solve_rate=round(solve_rate, 2),
-                recent_independent_rate=round(independent_rate, 2),
-                recent_hint_rate=round(hint_rate, 2),
+                recent_independent_rate=None if independent_rate is None else round(independent_rate, 2),
+                recent_hint_rate=None if hint_rate is None else round(hint_rate, 2),
                 recent_avg_confidence=avg_conf,
                 weakness=weakness,
                 reasons=reasons,
@@ -418,11 +511,11 @@ def _insights(rows: List[LeetCodeTopicStat], overall_hint_rate: Optional[float])
     rated = [r for r in rows if r.weakness is not None]
     lines: List[str] = []
     baseline = overall_hint_rate or 0.0
-    hinty = [r for r in rated if r.recent_hint_rate >= 0.5 and r.recent_hint_rate >= baseline + 0.15]
+    hinty = [r for r in rated if r.recent_hint_rate is not None and r.recent_hint_rate >= 0.5 and r.recent_hint_rate >= baseline + 0.15]
     if hinty:
         hinty.sort(key=lambda r: -r.recent_hint_rate)
         names = [r.topic for r in hinty[:3]]
-        rate = sum(r.recent_hint_rate for r in hinty[:3]) / len(names)
+        rate = sum(r.recent_hint_rate or 0 for r in hinty[:3]) / len(names)
         lines.append(
             f"You rely on hints more often on {_join(names)} ({_pct(rate)} of recent attempts vs "
             f"{_pct(baseline)} overall)."
@@ -453,7 +546,10 @@ def stats(session: Session) -> LeetCodeStats:
     durations = [a.duration_minutes for a in solved_attempts if a.duration_minutes is not None]
     solved_days = {a.attempted_at.date() for a in solved_attempts}
     current, best = streaks(solved_days, today)
-    hint_rate = _rate(sum(a.hint_used for a in attempts), len(attempts))
+    # Over the attempts where it's known; unknown is never "no".
+    hint_known = [a.hint_used for a in attempts if a.hint_used is not None]
+    indep_known = [a.solved_independently for a in attempts if a.solved_independently is not None]
+    hint_rate = _rate(sum(hint_known), len(hint_known))
 
     return LeetCodeStats(
         total_solved=len(solved_problem_ids),
@@ -462,7 +558,7 @@ def stats(session: Session) -> LeetCodeStats:
         solved_attempts=len(solved_attempts),
         avg_solve_minutes=round(sum(durations) / len(durations), 1) if durations else None,
         hint_usage_rate=hint_rate,
-        independent_solve_rate=_rate(sum(a.solved_independently for a in attempts), len(attempts)),
+        independent_solve_rate=_rate(sum(indep_known), len(indep_known)),
         current_streak=current,
         best_streak=best,
         solved_today=sum(1 for a in solved_attempts if a.attempted_at.date() == today),
