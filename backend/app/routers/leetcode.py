@@ -1,7 +1,7 @@
 """LeetCode progress tracking. All logic lives in app.services.leetcode,
 shared with the MCP tools."""
 
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import Session
@@ -14,6 +14,8 @@ from app.schemas import (
     LeetCodeAttemptLogged,
     LeetCodeGoalsRead,
     LeetCodeGoalsSet,
+    LeetCodeImportResult,
+    LeetCodeSubmissionImport,
     LeetCodeProblemCreate,
     LeetCodeProblemDetail,
     LeetCodeProblemList,
@@ -127,3 +129,14 @@ def get_goals(session: Session = Depends(get_db)):
 @router.put("/goals", response_model=LeetCodeGoalsRead)
 def set_goals(payload: LeetCodeGoalsSet, session: Session = Depends(get_db)):
     return leetcode_service.set_goals(session, payload)
+
+
+@router.post("/import", response_model=LeetCodeImportResult)
+def import_submissions(items: List[LeetCodeSubmissionImport], session: Session = Depends(get_db)):
+    """Import LeetCode submissions (e.g. from submission history). Each is
+    identified by its submission id, so re-importing adds nothing; hint use
+    and independence are stored as unknown, notes are left empty."""
+    try:
+        return leetcode_service.import_submissions(session, items)
+    except ValueError as exc:
+        raise _unprocessable(exc)

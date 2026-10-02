@@ -43,7 +43,10 @@ Topics are normalized so variants don't split: `sliding  window` becomes
   re-solves included (re-solving is practice). The week starts on Monday.
   Dates use `APP_TIMEZONE`, like the rest of Look.
 - **Average solve time:** over solved attempts that recorded minutes.
-- **Hint usage rate / independent solve rate:** share of *all* attempts.
+- **Hint usage rate / independent solve rate:** share of the attempts where
+  it's *known*. Hint use and independence can be unknown (null), for
+  example for imported submission history. Unknown never counts as "no":
+  50 imported attempts plus 5 logged ones with 2 hints is a 40% hint rate.
 - **Streak:** consecutive calendar days with at least one solved
   attempt. Today without a solve doesn't break the streak until the day is
   over; a full day with no solve does. The best streak is also reported.
@@ -58,12 +61,41 @@ averages four factors (each 0 = good, 1 = bad):
 3. hint rate
 4. low confidence: (5 − average confidence) ÷ 4, when confidence was given
 
+Factors 2 and 3 use only the recent attempts where they're known; a factor
+with nothing known is left out of the average.
+
 A topic needs at least 2 recent attempts to be rated. Topics above 0.4 are
 flagged "Needs work" (at most 3). Every topic shows the reasons in words,
 for example "solved 1 of 2 recent attempts, used hints on 1 of 2, average
 confidence 1.5/5", and the page shows plain-language insights such as
 "You rely on hints more often on DP and Graphs". It's a rule of thumb, not
 a science.
+
+## Importing submission history
+
+Past LeetCode submissions (for example `submission_history.json` in
+lc-solutions: `id`, `title`, `titleSlug`, `statusDisplay`, `lang`,
+`timestamp`) are imported with MCP `import_leetcode_submissions` or `POST
+/api/leetcode/import`. Each item gives the submission id, the problem
+number, title, difficulty and topics, the status, the time and the
+language.
+
+- The attempt's `source` is `leetcode` and its `external_id` is the
+  submission id; its link (`https://leetcode.com/submissions/detail/<id>/`)
+  is derived from that. `UNIQUE(source, external_id)` means importing the
+  same history again adds nothing.
+- `attempted_at` is the submission time in `APP_TIMEZONE`, and `solved` is
+  `statusDisplay == "Accepted"`.
+- Hint use and independence are null (unknown); duration, confidence and
+  notes stay empty.
+- Notes are only ever your own words. The old importer's generated
+  sentences ("Imported from … submission_history.json. Accepted LeetCode
+  submission …") were removed by migration `0006_leetcode_import_metadata`,
+  which kept any text you'd added after them. They're also stripped if an
+  assistant sends them again.
+
+In the UI, imported attempts show a small "Imported" link to the
+submission instead of a note.
 
 ## API
 

@@ -495,9 +495,11 @@ class LeetCodeAttemptCreate(BaseModel):
     difficulty: Optional[LeetCodeDifficulty] = None
     topics: List[str] = Field(default_factory=list)
     solved: bool = True
-    # None = derive it: solved without a hint.
+    # None = derive it from hint_used (solved without a hint); unknown if
+    # hint_used is unknown too.
     solved_independently: Optional[bool] = None
-    hint_used: bool = False
+    # Defaults to "no hint" for attempts you log yourself; None = unknown.
+    hint_used: Optional[bool] = False
     duration_minutes: Optional[int] = Field(default=None, ge=0, le=1440)
     language: Optional[str] = Field(default=None, max_length=40)
     confidence: Optional[int] = Field(default=None, ge=1, le=5)
@@ -546,15 +548,23 @@ class LeetCodeAttemptRead(BaseModel):
     problem_id: str
     attempted_at: datetime
     solved: bool
-    solved_independently: bool
-    hint_used: bool
+    solved_independently: Optional[bool]  # None = unknown
+    hint_used: Optional[bool]  # None = unknown
     duration_minutes: Optional[int]
     language: Optional[str]
     confidence: Optional[int]
     notes: Optional[str]
-    source: str
+    source: str  # manual | mcp | leetcode (imported)
+    external_id: Optional[str] = None  # LeetCode submission id, for imports
     created_at: datetime
     problem: LeetCodeProblemRead
+
+    @computed_field
+    @property
+    def external_url(self) -> Optional[str]:
+        if self.source == "leetcode" and self.external_id:
+            return f"https://leetcode.com/submissions/detail/{self.external_id}/"
+        return None
 
 
 class LeetCodeGoalsRead(BaseModel):
@@ -580,8 +590,10 @@ class LeetCodeStats(BaseModel):
     total_attempts: int
     solved_attempts: int
     avg_solve_minutes: Optional[float]  # solved attempts that recorded a duration
-    hint_usage_rate: Optional[float]  # share of all attempts that used a hint
-    independent_solve_rate: Optional[float]  # share of all attempts solved without help
+    # Shares of the attempts where it's known (imports often don't say);
+    # None when no attempt records it.
+    hint_usage_rate: Optional[float]
+    independent_solve_rate: Optional[float]
     current_streak: int
     best_streak: int
     solved_today: int  # solved attempts today, re-solves included
@@ -599,8 +611,8 @@ class LeetCodeTopicStat(BaseModel):
     # Over this topic's most recent attempts (window in LeetCodeTopicStats).
     recent_attempts: int
     recent_solve_rate: float
-    recent_independent_rate: float
-    recent_hint_rate: float
+    recent_independent_rate: Optional[float]  # over recent attempts where it's known
+    recent_hint_rate: Optional[float]
     recent_avg_confidence: Optional[float]
     # 0 (strong) .. 1 (weak): mean of the factors above; None when there are
     # too few recent attempts to judge.
@@ -827,3 +839,22 @@ class WorkPlan(BaseModel):
     undated: List[WorkItem]  # open tasks with no due date, most important first (top few)
     undated_total: int
     remaining: int  # not-done items in overdue + today
+class LeetCodeSubmissionImport(BaseModel):
+    """One LeetCode submission to import (from submission history). The
+    problem's number, title and difficulty come from LeetCode; hint use and
+    independence aren't in the history, so they're stored as unknown."""
+
+    submission_id: str = Field(min_length=1, max_length=40)
+    problem_number: int = Field(ge=1, le=100000)
+    title: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    difficulty: Optional[LeetCodeDifficulty] = None
+    topics: List[str] = Field(default_factory=list)
+    status: str = "Accepted"  # LeetCode's statusDisplay; only "Accepted" counts as solved
+    submitted_at: datetime  # with timezone (or UTC), e.g. from the epoch-ms timestamp
+    language: Optional[str] = Field(default=None, max_length=40)
+
+
+class LeetCodeImportResult(BaseModel):
+    created: int
+    duplicates: int  # already imported (same submission id), skipped
+    problems_created: int
