@@ -17,6 +17,7 @@ import { api } from "@/lib/api";
 import { compactTime, eventHue, timeLabel } from "@/lib/calendarEvents";
 import { notifyTasksChanged, onEventsChanged, onTasksChanged } from "@/lib/events";
 import { addDaysIso, formatDateLong, todayIso } from "@/lib/format";
+import { weekRangeIso } from "@/lib/week";
 import { fmtGrams, fmtKcal, MACRO_LABEL, MACROS } from "@/lib/nutrition";
 import { isTaskDone, type DaySummary, type MacroKey, type Occurrence, type Task } from "@/lib/types";
 import QuickAddBar from "@/components/QuickAddBar";
@@ -259,7 +260,8 @@ export default function DashboardPage() {
     version
   );
   const nutrition = useCard(() => api.getNutritionDay(today), version);
-  const history = useCard(() => api.getNutritionHistory(addDaysIso(today, -6), today), version);
+  const thisWeek = weekRangeIso(today);
+  const history = useCard(() => api.getNutritionHistory(thisWeek.start, thisWeek.end), version);
   const week = useCard(() => api.getWeekSummary(), version);
 
   const refresh = () => setVersion((v) => v + 1);
@@ -345,6 +347,7 @@ export default function DashboardPage() {
               <WeekChart
                 days={history.data.days}
                 selected={today}
+                lastSelectable={today}
                 onSelect={(iso) => router.push(iso === today ? "/nutrition" : `/nutrition?date=${iso}`)}
               />
             </div>

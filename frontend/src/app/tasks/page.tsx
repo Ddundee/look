@@ -58,7 +58,7 @@ function AllTasksView() {
   }
 
   return (
-    <Page className="mx-auto w-full max-w-5xl">
+    <Page>
       <PageHeader
         title="All Tasks"
         subtitle={

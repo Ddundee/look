@@ -65,7 +65,7 @@ export default function CompletedPage() {
   const maxCat = byCategory.reduce((m, [, n]) => Math.max(m, n), 0);
 
   return (
-    <Page className="mx-auto w-full max-w-5xl">
+    <Page>
       <PageHeader
         title="Completed"
         subtitle={

@@ -4,7 +4,8 @@ import { Suspense, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { CaretLeftIcon, CaretRightIcon, ForkKnifeIcon, PlusIcon, TargetIcon } from "@phosphor-icons/react";
 import { api } from "@/lib/api";
-import { addDaysIso, formatDateLong, relativeDueLabel, todayIso, weekdayLabel } from "@/lib/format";
+import { addDaysIso, formatDate, formatDateLong, relativeDueLabel, todayIso, weekdayLabel } from "@/lib/format";
+import { weekRangeIso } from "@/lib/week";
 import { fmtGrams, fmtKcal, groupByMeal } from "@/lib/nutrition";
 import type { DaySummary, FoodEntry, HistorySummary, TargetsResponse } from "@/lib/types";
 import { BUTTON_PRIMARY, BUTTON_SECONDARY, CARD, ICON_BUTTON } from "@/lib/ui";
@@ -31,9 +32,12 @@ function NutritionView() {
   // Selected day lives in ?date= so a day is linkable; anything malformed
   // or in the future falls back to today.
   const day = raw && ISO.test(raw) && raw <= today ? raw : today;
+  // The chart is the calendar week (Mon-Sun) containing the selected day,
+  // so picking another day of the same week keeps the same seven bars.
+  const week = weekRangeIso(day);
 
   const [summary, setSummary] = useState<DaySummary | null>(null);
-  const [week, setWeek] = useState<HistorySummary | null>(null);
+  const [weekSummary, setWeek] = useState<HistorySummary | null>(null);
   const [targets, setTargets] = useState<TargetsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
@@ -44,7 +48,7 @@ function NutritionView() {
     let cancelled = false;
     Promise.all([
       api.getNutritionDay(day),
-      api.getNutritionHistory(addDaysIso(day, -6), day),
+      api.getNutritionHistory(week.start, week.end),
       api.getNutritionTargets(),
     ])
       .then(([s, h, t]) => {
@@ -60,7 +64,7 @@ function NutritionView() {
     return () => {
       cancelled = true;
     };
-  }, [day, version]);
+  }, [day, week.start, week.end, version]);
 
   function goTo(iso: string) {
     router.replace(iso >= today ? pathname : `${pathname}?date=${iso}`, { scroll: false });
@@ -177,21 +181,21 @@ function NutritionView() {
             </Panel>
           </div>
 
-          {week && (
+          {weekSummary && (
             <section aria-labelledby="week-heading" className={`anim-fade-up self-start p-5 ${CARD}`}>
               <h2 id="week-heading" className="pb-6 text-[13px] font-medium text-fg-muted">
-                Calories, last 7 days
+                Calories, week of {formatDate(week.start)}
               </h2>
-              <WeekChart days={week.days} selected={day} onSelect={goTo} />
+              <WeekChart days={weekSummary.days} selected={day} onSelect={goTo} lastSelectable={today} />
               <p className="mt-5 border-t border-line pt-4 text-sm text-fg-muted">
-                {week.averages ? (
+                {weekSummary.averages ? (
                   <>
-                    Averaging <span className="font-mono tabular-nums text-fg">{fmtKcal(week.averages.calories)}</span>{" "}
-                    kcal and <span className="font-mono tabular-nums text-fg">{fmtGrams(week.averages.protein_g)}</span>{" "}
-                    protein over {week.logged_days} logged {week.logged_days === 1 ? "day" : "days"}.
+                    Averaging <span className="font-mono tabular-nums text-fg">{fmtKcal(weekSummary.averages.calories)}</span>{" "}
+                    kcal and <span className="font-mono tabular-nums text-fg">{fmtGrams(weekSummary.averages.protein_g)}</span>{" "}
+                    protein over {weekSummary.logged_days} logged {weekSummary.logged_days === 1 ? "day" : "days"}.
                   </>
                 ) : (
-                  "No entries in these 7 days."
+                  "Nothing logged this week."
                 )}
               </p>
             </section>

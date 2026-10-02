@@ -305,7 +305,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
           {/* The one page-level scroller. App pages fill it exactly on
               desktop (h-full + min-h-0 chain), so it only scrolls when a
-              window is too short or on smaller screens. */}
+              window is too short or on smaller screens. Their width tracks
+              the space next to the sidebar (so collapsing it widens them),
+              capped at 100rem so ultrawide screens don't stretch them thin. */}
           <main
             id="main"
             tabIndex={-1}
@@ -317,7 +319,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               className={
                 isDocument
                   ? "mx-auto w-full max-w-3xl pb-16 pt-6 sm:pt-8"
-                  : "mx-auto flex min-h-full w-full max-w-7xl flex-col py-4 sm:py-5 md:h-full"
+                  : "mx-auto flex min-h-full w-full max-w-[100rem] flex-col py-4 sm:py-5 md:h-full"
               }
             >
               {children}

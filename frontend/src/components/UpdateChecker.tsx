@@ -4,11 +4,10 @@ import { useEffect } from "react";
 import { toast as sonner } from "sonner";
 import { api } from "@/lib/api";
 import type { UpdateStatus } from "@/lib/types";
+import { ACTIVE_JOB_STATES, createUpdateFlow } from "@/lib/updateFlow";
 
 const TOAST_ID = "look-update";
 const CHECK_EVERY_MS = 15 * 60 * 1000;
-const POLL_MS = 2000;
-const GIVE_UP_MS = 5 * 60 * 1000;
 const DISMISSED_KEY = "look-update-dismissed";
 /** Fired by Settings' "Check for updates" to show the toast right away. */
 export const CHECK_UPDATE_EVENT = "look:check-update";
@@ -37,83 +36,70 @@ function summary(status: UpdateStatus): string {
   return changes.length > 3 ? `${shown.join("; ")}; and ${changes.length - 3} more` : shown.join("; ");
 }
 
-// Module-level, not React state: nothing here renders, and there is only
-// ever one app shell (so one checker) per page.
-let updating = false;
+// While an update runs the toast has no buttons and can't be dismissed.
+// Sonner merges options when a toast is updated by id, so the offer's
+// Update/Later buttons must be cleared explicitly.
+const BUSY = { action: undefined, cancel: undefined, dismissible: false, closeButton: false } as const;
+const SETTLED = { dismissible: true, closeButton: true } as const;
 
-function showFailed(reason: string, target: string | null): void {
-  updating = false;
-  sonner.error("Update failed", {
-    id: TOAST_ID,
-    duration: Infinity,
-    description: reason,
-    action: {
-      label: "Retry",
-      onClick: (e) => {
-        e.preventDefault();
-        void runUpdate(target);
-      },
-    },
-  });
-}
-
-async function runUpdate(target: string | null): Promise<void> {
-  updating = true;
-  sonner.loading("Downloading update", { id: TOAST_ID, duration: Infinity, description: "This takes a minute." });
-  try {
-    await api.startUpdate();
-  } catch (err) {
-    showFailed(err instanceof Error ? err.message : "Couldn't start the update.", target);
-    return;
-  }
-
-  const started = Date.now();
-  const restarting = () =>
-    sonner.loading("Restarting", { id: TOAST_ID, duration: Infinity, description: "Back in a few seconds." });
-
-  const poll = async () => {
-    if (Date.now() - started > GIVE_UP_MS) {
-      updating = false;
+/** The one update flow per page; Settings → Version reads its state. */
+export const updateFlow = createUpdateFlow(
+  {
+    startUpdate: () => api.startUpdate(),
+    getUpdateStatus: () => api.getUpdateStatus(),
+    getVersion: () => api.getVersion(),
+    reload: () => window.location.reload(),
+    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    now: () => Date.now(),
+  },
+  {
+    progress: (title, description) =>
+      sonner.loading(title, { id: TOAST_ID, duration: Infinity, description, ...BUSY }),
+    failed: (reason, retry) =>
+      sonner.error("Update failed", {
+        id: TOAST_ID,
+        duration: Infinity,
+        description: reason,
+        cancel: undefined,
+        ...SETTLED,
+        action: {
+          label: "Retry",
+          onClick: (e) => {
+            e.preventDefault();
+            retry();
+          },
+        },
+      }),
+    slow: () =>
       sonner.error("The update is taking longer than expected", {
         id: TOAST_ID,
         duration: Infinity,
         description: "Check the server, then reload this page.",
-      });
-      return;
-    }
-    try {
-      const job = (await api.getUpdateStatus()).job;
-      if (job?.state === "failed") return showFailed(job.error ?? "The update failed.", target);
-      if (job?.state === "backing_up") {
-        sonner.loading("Backing up your data", { id: TOAST_ID, duration: Infinity, description: "Before the new version starts." });
-      }
-      if (job?.state === "restarting" || job?.state === "done") restarting();
-      if (job?.state === "done") {
-        const { revision } = await api.getVersion();
-        if (!target || revision === target) {
-          sonner.success("Updated. Reloading", { id: TOAST_ID, duration: Infinity, description: undefined });
-          setTimeout(() => window.location.reload(), 800);
-          return;
-        }
-      }
-    } catch {
-      // Expected while the app's containers restart.
-      restarting();
-    }
-    setTimeout(poll, POLL_MS);
-  };
-  setTimeout(poll, POLL_MS);
-}
+        action: undefined,
+        cancel: undefined,
+        ...SETTLED,
+      }),
+    succeeded: () =>
+      sonner.success("Updated. Reloading", { id: TOAST_ID, duration: Infinity, description: undefined, ...BUSY }),
+  }
+);
 
 async function check(manual = false): Promise<void> {
-  if (updating) return;
+  if (updateFlow.isRunning()) return;
   let status: UpdateStatus;
   try {
     status = await api.getUpdateStatus(manual);
   } catch {
     return;
   }
-  if (!status.enabled || !status.update_available || !status.latest) return;
+  if (!status.enabled) return;
+  // Already updating (started in another tab, or before this page
+  // loaded): show its progress instead of offering another Update.
+  if (status.job && (ACTIVE_JOB_STATES as readonly string[]).includes(status.job.state)) {
+    void updateFlow.follow(status.job.target);
+    return;
+  }
+  if (!status.update_available || !status.latest) return;
   const target = status.latest.sha;
   if (manual) writeDismissed(null);
   else if (readDismissed() === target) return;
@@ -121,11 +107,12 @@ async function check(manual = false): Promise<void> {
     id: TOAST_ID,
     duration: Infinity,
     description: summary(status),
+    ...SETTLED,
     action: {
       label: "Update",
       onClick: (e) => {
         e.preventDefault();
-        void runUpdate(target);
+        void updateFlow.run(target);
       },
     },
     cancel: { label: "Later", onClick: () => writeDismissed(target) },

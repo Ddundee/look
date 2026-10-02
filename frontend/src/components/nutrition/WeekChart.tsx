@@ -16,10 +16,13 @@ export default function WeekChart({
   days,
   selected,
   onSelect,
+  lastSelectable,
 }: {
   days: HistoryDay[];
   selected: string;
   onSelect: (iso: string) => void;
+  /** Days after this (later in the week) have no data yet and can't be picked. */
+  lastSelectable?: string;
 }) {
   const target = days[days.length - 1]?.targets?.calories ?? null;
   const peak = Math.max(1, ...days.map((d) => d.totals.calories), target ? target * 1.15 : 0);
@@ -47,18 +50,22 @@ export default function WeekChart({
             const dateLabel = date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
             const value = d.entry_count ? `${fmtKcal(cal)} kcal` : "Nothing logged";
             const detail = goal !== null ? `${over ? "over" : "of"} ${fmtKcal(goal)} target` : null;
+            const future = lastSelectable !== undefined && d.day > lastSelectable;
             return (
               <button
                 key={d.day}
                 type="button"
                 onClick={() => onSelect(d.day)}
-                aria-label={`${dateLabel}: ${value}${detail ? `, ${detail}` : ""}`}
+                disabled={future}
+                aria-label={future ? `${dateLabel}: still to come` : `${dateLabel}: ${value}${detail ? `, ${detail}` : ""}`}
                 aria-pressed={isSelected}
-                className="group relative flex h-full items-end justify-center rounded-t-md outline-offset-2"
+                className="group relative flex h-full items-end justify-center rounded-t-md outline-offset-2 disabled:cursor-default"
               >
                 <span
                   className={`block w-full max-w-6 rounded-t-[4px] transition-[height,background-color,box-shadow] duration-300 ${
-                    d.entry_count === 0
+                    future
+                      ? "bg-line"
+                      : d.entry_count === 0
                       ? "bg-line-strong"
                       : over
                         ? "bg-warn group-hover:brightness-110"
@@ -68,7 +75,9 @@ export default function WeekChart({
                 />
                 <span
                   role="presentation"
-                  className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 hidden -translate-x-1/2 whitespace-nowrap rounded-lg bg-surface px-2.5 py-1.5 text-left elev-3 group-hover:block group-focus-visible:block"
+                  className={`pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 hidden -translate-x-1/2 whitespace-nowrap rounded-lg bg-surface px-2.5 py-1.5 text-left elev-3 ${
+                    future ? "" : "group-hover:block group-focus-visible:block"
+                  }`}
                 >
                   <span className="block font-mono text-sm font-medium tabular-nums text-fg">{value}</span>
                   <span className="block text-[11px] text-fg-muted">
