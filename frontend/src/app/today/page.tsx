@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   CalendarBlankIcon,
   CalendarCheckIcon,
+  CalendarDotsIcon,
   CaretRightIcon,
   CodeIcon,
   FireIcon,
@@ -100,7 +101,13 @@ export default function TodayPage() {
   }
 
   const dueToday = view.due_today.filter((t) => !view.scheduled.some((s) => s.id === t.id));
-  const taskCount = view.overdue.length + view.scheduled.length + dueToday.length + view.suggested_high_priority.length;
+  // Imported deadlines (Canvas assignments) due today are things to do, so
+  // they sit with the tasks (checkable) rather than in the schedule. They
+  // stay events; nothing is copied into tasks.
+  const deadlines = schedule.filter((o) => o.deadline && !o.cancelled);
+  const events = schedule.filter((o) => !(o.deadline && !o.cancelled));
+  const taskCount =
+    view.overdue.length + view.scheduled.length + dueToday.length + view.suggested_high_priority.length + deadlines.length;
 
   const committed = [...view.scheduled, ...dueToday];
   const doneCount = committed.filter(isTaskDone).length;
@@ -164,6 +171,18 @@ export default function TodayPage() {
                 onUpdated={onUpdatedIn("due_today")}
                 onDeleted={onDeletedIn("due_today")}
               />
+              {deadlines.length > 0 && (
+                <section className="anim-fade-up">
+                  <h3 className="flex items-center gap-2 px-3 pb-1 pt-2.5 text-xs font-medium text-fg-muted">
+                    <CalendarDotsIcon weight="bold" className="h-3.5 w-3.5 text-accent" aria-hidden />
+                    Assignments due today
+                    <span className="font-mono font-normal tabular-nums text-fg-faint">
+                      {deadlines.filter((o) => o.completed).length}/{deadlines.length}
+                    </span>
+                  </h3>
+                  <AgendaList occurrences={deadlines} onOpen={(occ) => setEditor({ kind: "occurrence", occ })} bare />
+                </section>
+              )}
               <TaskSection
                 bare
                 title="High priority, unscheduled"
@@ -181,7 +200,7 @@ export default function TodayPage() {
           <Panel
             title="Schedule"
             icon={CalendarBlankIcon}
-            count={schedule.length}
+            count={events.length}
             className="lg:flex-1"
             actions={
               <Link href="/calendar" className="text-xs font-medium text-accent-text underline-offset-4 hover:underline">
@@ -189,10 +208,10 @@ export default function TodayPage() {
               </Link>
             }
           >
-            {schedule.length === 0 ? (
+            {events.length === 0 ? (
               <EmptyState variant="panel" icon={CalendarBlankIcon} title="Nothing scheduled today" />
             ) : (
-              <AgendaList occurrences={schedule} onOpen={(occ) => setEditor({ kind: "occurrence", occ })} bare />
+              <AgendaList occurrences={events} onOpen={(occ) => setEditor({ kind: "occurrence", occ })} bare />
             )}
           </Panel>
 

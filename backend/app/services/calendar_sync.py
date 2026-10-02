@@ -12,6 +12,12 @@ already imported from it:
 - a known UID missing from the feed -> marked external_status="removed"
   (hidden, not deleted; restored if it comes back).
 
+Deadlines (assignments) can be checked off in Look. Completion is never
+part of the feed-owned fields: a sync only touches it when the feed
+explicitly states completion and that statement changed since the last
+sync (see _reconcile_completion). A feed that says nothing, like every
+Canvas feed, leaves your checkmarks alone.
+
 Reconciling happens only after the download AND the parse succeeded, in a
 single transaction. A network error, an HTTP error or a malformed feed
 records last_error and changes no events.
@@ -260,6 +266,7 @@ def _apply(event: Event, parsed: ics.ParsedEvent, now: datetime) -> None:
     event.exdates = parsed.exdates
     event.external_url = parsed.url
     event.external_status = parsed.status
+    event.is_deadline = parsed.deadline
     event.external_hash = parsed.content_hash()
     event.last_synced_at = now
     event.updated_at = now
@@ -284,6 +291,31 @@ def _replace_overrides(session: Session, event: Event, parsed: ics.ParsedEvent) 
         )
 
 
+def _reconcile_completion(event: Event, item: ics.ParsedEvent, now: datetime) -> bool:
+    """Apply completion the feed states explicitly. Precedence:
+
+    - the feed says nothing (None): leave completion exactly as it is;
+    - the feed says the same thing as last sync: leave it (so unchecking
+      something the feed calls done sticks until the feed changes);
+    - the feed now says completed: check it off (source "external") unless
+      it's already checked;
+    - the feed now says not completed: uncheck it only if the feed was what
+      checked it; a local checkmark is never removed by a sync.
+
+    Returns whether anything changed."""
+    stated = item.external_completed
+    if stated is None or not event.is_deadline or stated == event.external_completed:
+        return False
+    event.external_completed = stated
+    if stated and event.completed_at is None:
+        event.completed_at = item.external_completed_at or now
+        event.completion_source = "external"
+    elif not stated and event.completion_source == "external":
+        event.completed_at = None
+        event.completion_source = None
+    return True
+
+
 def reconcile(session: Session, sub: CalendarSubscription, parsed: List[ics.ParsedEvent]) -> _Counts:
     """Make the subscription's events match `parsed`, the complete current
     feed. Doesn't commit; the caller commits everything at once."""
@@ -302,19 +334,25 @@ def reconcile(session: Session, sub: CalendarSubscription, parsed: List[ics.Pars
             event = Event(subscription_id=sub.id, external_uid=item.uid, source=SOURCE, category="other",
                           title=item.title, start_at=item.start_at, end_at=item.end_at)
             _apply(event, item, now)
+            _reconcile_completion(event, item, now)
             session.add(event)
             session.flush()  # the overrides reference it
             _replace_overrides(session, event, item)
             counts.created += 1
         elif event.external_hash != digest or event.external_status != item.status:
             _apply(event, item, now)
+            _reconcile_completion(event, item, now)
             session.add(event)
             _replace_overrides(session, event, item)
             counts.updated += 1
         else:
             event.last_synced_at = now
+            changed = _reconcile_completion(event, item, now)
             session.add(event)
-            counts.unchanged += 1
+            if changed:
+                counts.updated += 1
+            else:
+                counts.unchanged += 1
     for uid, event in existing.items():
         if uid not in seen and event.external_status != "removed":
             event.external_status = "removed"
@@ -417,7 +455,7 @@ def sync_subscription(
             return CalendarSyncResult(status="not_modified", unchanged=unchanged, subscription=read(session, sub))
 
         try:
-            parsed = ics.parse(result.body or b"", _tz())
+            parsed = ics.parse(result.body or b"", _tz(), sub.name)
         except ics.IcsError as exc:
             return _record_error(session, sub, str(exc))
 
@@ -446,7 +484,7 @@ def import_file(session: Session, content: bytes, name: str) -> CalendarSyncResu
     if display.lower().endswith(".ics"):
         display = display[:-4].strip()
     display = (display or "Imported calendar")[:100]
-    parsed = ics.parse(content, _tz())  # IcsError is a ValueError
+    parsed = ics.parse(content, _tz(), display)  # IcsError is a ValueError
 
     sub = session.exec(
         select(CalendarSubscription).where(

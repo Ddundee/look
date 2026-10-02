@@ -82,7 +82,10 @@ mcp = MCPServer(
         "calendars) and asks to add it, call add_calendar_subscription: that "
         "creates a LIVE subscription Look re-fetches automatically, so new "
         "and changed events keep arriving. Never import a URL once. "
-        "Imported events are read-only. Dates are ISO "
+        "Imported events are read-only, except that deadlines (assignments, "
+        "is_deadline/deadline=true) can be checked off with "
+        "set_deadline_completed; find them with get_deadlines or "
+        "find_events. Dates are ISO "
         "'YYYY-MM-DD', times are "
         "'HH:MM' 24-hour."
     ),
@@ -894,6 +897,47 @@ def delete_event(event_id: str) -> dict:
         except ValueError as exc:
             return _error(exc)
         return {"deleted_id": event_id}
+
+
+@mcp.tool()
+def get_deadlines(start_date: str, end_date: Optional[str] = None, include_completed: bool = True) -> dict:
+    """Things due between two dates (inclusive; end defaults to start):
+    assignments imported from Canvas or other calendars, each with
+    event_id, title (Canvas appends the course code, e.g. '[CS-3214]'),
+    start_at (the due time), completed and completion_source ('local' if
+    the user checked it, 'external' if the source said so). Up to 366
+    days per call."""
+    try:
+        start = _parse_day(start_date, "start_date")
+        end = _parse_day(end_date, "end_date") or start
+        with _session() as session:
+            due = [
+                o.model_dump(mode="json")
+                for o in events_service.occurrences(session, start, end)
+                if o.deadline and (include_completed or not o.completed)
+            ]
+            return {"start_date": start.isoformat(), "end_date": end.isoformat(), "deadlines": due, "count": len(due)}
+    except ValueError as exc:
+        return _error(exc)
+
+
+@mcp.tool()
+def set_deadline_completed(event_id: str, completed: bool = True) -> dict:
+    """Check off (completed=true) or un-check a deadline, e.g. 'mark my CS
+    3214 assignment done'. Use get_deadlines or find_events to get the
+    event_id. Only works on deadlines (is_deadline=true); ordinary events
+    can't be completed. This changes only completion: an imported event's
+    title, time and other fields stay controlled by its calendar feed, and
+    later syncs keep the checkmark."""
+    with _session() as session:
+        event = events_service.get_event(session, event_id)
+        if event is None:
+            return _event_not_found(event_id)
+        try:
+            event = events_service.set_completed(session, event, completed)
+        except ValueError as exc:
+            return _error(exc)
+        return EventRead.model_validate(event).model_dump(mode="json")
 
 
 @mcp.tool()

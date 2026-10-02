@@ -219,6 +219,8 @@ appear in `get_schedule` with `subscription_name` and are read-only. See
 | `update_calendar_subscription` | Rename, pause/resume (enabled), change the interval |
 | `remove_calendar_subscription` | Remove one; keep_events=true keeps its events as normal events |
 | `import_ics` | One-time import of raw iCalendar text (a snapshot; prefer a URL subscription) |
+| `get_deadlines` | Imported assignments due in a date range, with `completed` and `completion_source` |
+| `set_deadline_completed` | Check a deadline off (or un-check it); nothing else about it changes |
 
 ## Resources (read-only)
 
@@ -246,3 +248,4 @@ appear in `get_schedule` with `subscription_name` and are read-only. See
 - "Add CS 101, Mon/Wed/Fri 10 to 10:50 through Dec 12, skipping Thanksgiving week."
 - "No class this Friday."
 - "Add my Canvas calendar: https://canvas.example.edu/feeds/calendars/user_….ics"
+- "Mark my CS 3214 Project 2 assignment complete."

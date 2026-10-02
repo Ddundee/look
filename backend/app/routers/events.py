@@ -117,6 +117,24 @@ def delete_event(event_id: str, session: Session = Depends(get_db)) -> dict:
     return {"deleted_id": event_id}
 
 
+@router.post("/{event_id}/complete", response_model=EventRead)
+def complete_event(event_id: str, session: Session = Depends(get_db)):
+    """Check off a deadline (e.g. an imported assignment). Only completion
+    changes; imported events stay otherwise read-only."""
+    try:
+        return events_service.set_completed(session, _event_or_404(session, event_id), True)
+    except ValueError as exc:
+        raise _unprocessable(exc)
+
+
+@router.post("/{event_id}/uncomplete", response_model=EventRead)
+def uncomplete_event(event_id: str, session: Session = Depends(get_db)):
+    try:
+        return events_service.set_completed(session, _event_or_404(session, event_id), False)
+    except ValueError as exc:
+        raise _unprocessable(exc)
+
+
 @router.put("/{event_id}/occurrences/{day}", response_model=Occurrence)
 def edit_occurrence(event_id: str, day: date, payload: OccurrenceEdit, session: Session = Depends(get_db)):
     event = _event_or_404(session, event_id)

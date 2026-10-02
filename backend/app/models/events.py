@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime
 from typing import List, Optional
 
-from sqlalchemy import Column, JSON, UniqueConstraint
+from sqlalchemy import Column, JSON, UniqueConstraint, false
 from sqlmodel import Field, SQLModel
 
 from app.utils import utcnow
@@ -50,6 +50,17 @@ class Event(SQLModel, table=True):
     # Hash of the imported fields: same hash on the next sync = unchanged.
     external_hash: Optional[str] = None
     last_synced_at: Optional[datetime] = None
+
+    # Deadlines (imported assignments) can be checked off even though the
+    # feed owns everything else. Completion is Look's own state: syncs never
+    # clear it. completed_at set = done; completion_source is "local" (you
+    # checked it) or "external" (the source said so). external_completed is
+    # the completion the source last stated explicitly (null = it never
+    # said), so only a change in what the source says is applied.
+    is_deadline: bool = Field(default=False, sa_column_kwargs={"server_default": false()})
+    completed_at: Optional[datetime] = None
+    completion_source: Optional[str] = None
+    external_completed: Optional[bool] = None
 
 
 class EventOverride(SQLModel, table=True):

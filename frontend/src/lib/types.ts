@@ -197,7 +197,15 @@ export interface CalendarEvent {
   external_url: string | null;
   external_status: ExternalStatus;
   last_synced_at: string | null;
+  /** Something due (an imported assignment) that can be checked off. */
+  is_deadline: boolean;
+  completed: boolean;
+  completed_at: string | null;
+  completion_source: CompletionSource;
 }
+
+/** local: checked off in Look. external: the source calendar said so. */
+export type CompletionSource = "local" | "external" | null;
 
 /** For events from a calendar subscription: cancelled in the feed, or no
  * longer in it. Both also set `cancelled` on occurrences. */
@@ -223,6 +231,11 @@ export interface Occurrence {
   subscription_name: string | null;
   external_url: string | null;
   external_status: ExternalStatus;
+  /** Something due that can be checked off; completed is not cancelled. */
+  deadline: boolean;
+  completed: boolean;
+  completed_at: string | null;
+  completion_source: CompletionSource;
 }
 
 export interface EventWithContext {
