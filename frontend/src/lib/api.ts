@@ -192,6 +192,8 @@ export const api = {
   updateEvent: (id: string, payload: EventPayload) =>
     request<EventWithContext>(`/api/events/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteEvent: (id: string) => request<{ deleted_id: string }>(`/api/events/${id}`, { method: "DELETE" }),
+  completeEvent: (id: string) => request<CalendarEvent>(`/api/events/${id}/complete`, { method: "POST" }),
+  uncompleteEvent: (id: string) => request<CalendarEvent>(`/api/events/${id}/uncomplete`, { method: "POST" }),
   editOccurrence: (id: string, day: string, payload: OccurrenceEditPayload) =>
     request<Occurrence>(`/api/events/${id}/occurrences/${day}`, {
       method: "PUT",

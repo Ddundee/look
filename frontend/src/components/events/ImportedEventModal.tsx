@@ -7,6 +7,7 @@ import { addDaysIso, formatDateLong } from "@/lib/format";
 import type { Occurrence } from "@/lib/types";
 import { BUTTON_PRIMARY, BUTTON_SECONDARY, MUTED } from "@/lib/ui";
 import Dialog from "../Dialog";
+import DeadlineCheckbox from "./DeadlineCheckbox";
 
 /** Details of an event that comes from a calendar subscription. The feed
  * owns it, so it can't be edited here: changes are made at the source and
@@ -62,7 +63,23 @@ export default function ImportedEventModal({ occ, onClose }: { occ: Occurrence; 
         <p className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">Cancelled in {source}.</p>
       ) : null}
 
-      <p className="text-sm text-fg">{when}</p>
+      {occ.deadline && !occ.cancelled ? (
+        <div className="flex items-start gap-3">
+          <DeadlineCheckbox eventId={occ.event_id} title={occ.title} completed={occ.completed} />
+          <div className="text-sm">
+            <p className={occ.completed ? "text-fg-faint line-through decoration-fg-faint/60" : "text-fg"}>Due {when}</p>
+            <p className="mt-0.5 text-xs text-fg-muted">
+              {occ.completed
+                ? occ.completion_source === "external"
+                  ? `Marked done in ${source}.`
+                  : "You checked this off. Syncing keeps it."
+                : "Check it off when you're done; syncing won't undo it."}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <p className="text-sm text-fg">{when}</p>
+      )}
       {occ.location && (
         <p className={`flex items-center gap-1.5 text-sm ${MUTED}`}>
           <MapPinIcon className="h-4 w-4 shrink-0" aria-hidden />
@@ -78,8 +95,8 @@ export default function ImportedEventModal({ occ, onClose }: { occ: Occurrence; 
       <p className="flex items-start gap-2 rounded-lg bg-surface-2 px-3 py-2 text-xs leading-relaxed text-fg-muted">
         <CalendarDotsIcon className="mt-0.5 h-4 w-4 shrink-0 text-accent" aria-hidden />
         <span>
-          From <span className="font-medium text-fg">{source}</span>. It&apos;s read-only in Look: change it in the
-          source calendar and it updates here on the next sync.
+          From <span className="font-medium text-fg">{source}</span>. It&apos;s read-only in Look
+          {occ.deadline ? " apart from checking it off" : ""}: change it in the source calendar and it updates here on the next sync.
         </span>
       </p>
     </Dialog>

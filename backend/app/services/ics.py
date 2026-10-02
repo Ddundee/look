@@ -10,15 +10,19 @@ components onto Look's event model:
   (at most once a day), otherwise the event is imported as its first
   occurrence with a warning;
 - instances with RECURRENCE-ID become per-date overrides of their series;
-- VTODOs with a DUE (task feeds) become a short event at the due time.
+- VTODOs with a DUE (task feeds) become a short event at the due time;
+- deadlines (assignments: see classify_deadline) are actionable: a
+  date-only one becomes due at 11:59 PM local time instead of an all-day
+  event, and explicit completion in the feed (VTODO only) is read out.
 
 Nothing here touches the database; see app.services.calendar_sync.
 """
 
 import hashlib
 import json
+import re
 from dataclasses import asdict, dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Dict, List, Optional
 from zoneinfo import ZoneInfo
 
@@ -31,6 +35,25 @@ from app.services.events import build_rule, normalize_rrule
 INSTANT = timedelta(minutes=1)
 MAX_TITLE = 200
 MAX_TEXT = 5000
+# When a deadline has only a date (Canvas exports assignments due at 11:59
+# PM that way), it's due at the end of that day, local time.
+DATE_ONLY_DUE = time(23, 59)
+
+# Canvas feed conventions (canvas-lms CalendarEvent::IcalEvent#to_ics):
+# UIDs are "event-<type>-<id>" and URLs end in "#<type>_<id>". Assignments,
+# their per-section overrides and discussion checkpoints are deadlines;
+# "calendar-event" is an ordinary event (a lecture, Fall Break).
+_CANVAS_DEADLINE_UID = re.compile(r"^event-(assignment|assignment-override|sub-assignment)-\d+$")
+_CANVAS_EVENT_UID = re.compile(r"^event-calendar-event-\d+$")
+_DEADLINE_URL = re.compile(
+    r"#(assignment|assignment_override|sub_assignment)_\d+$|/(assignments|quizzes|discussion_topics)/\d+"
+)
+# Weak evidence, only counted together with an LMS source (below).
+_DEADLINE_WORDS = re.compile(
+    r"\b(homework|hw ?\d+|assignments?|problem sets?|psets?|quiz(zes)?|lab reports?|essays?|submissions?|due)\b",
+    re.IGNORECASE,
+)
+_LMS_SOURCE = re.compile(r"canvas|instructure|blackboard|moodle|brightspace|d2l|gradescope|schoology", re.IGNORECASE)
 
 
 class IcsError(ValueError):
@@ -64,13 +87,21 @@ class ParsedEvent:
     overrides: List[ParsedOverride] = field(default_factory=list)
     sequence: int = 0
     warnings: List[str] = field(default_factory=list)
+    # Something due (an assignment), so it can be checked off in Look.
+    deadline: bool = False
+    # Completion as the feed states it: True/False only when the feed says
+    # so explicitly (VTODO STATUS/COMPLETED/PERCENT-COMPLETE), None when it
+    # says nothing, which is every VEVENT and all of Canvas.
+    external_completed: Optional[bool] = None
+    external_completed_at: Optional[datetime] = None
 
     def content_hash(self) -> str:
-        """Stable digest of everything that ends up in Look, so a re-sync
-        can tell an unchanged event from a changed one."""
+        """Stable digest of the feed-owned fields, so a re-sync can tell an
+        unchanged event from a changed one. Completion is deliberately left
+        out: it's reconciled separately and never overwrites local state."""
         data = asdict(self)
-        data.pop("warnings")
-        data.pop("sequence")
+        for key in ("warnings", "sequence", "external_completed", "external_completed_at"):
+            data.pop(key)
         return hashlib.sha256(json.dumps(data, sort_keys=True, default=str).encode()).hexdigest()
 
 
@@ -132,6 +163,48 @@ def _times(component, tz: ZoneInfo):
     if end_at <= start_at:
         end_at = start_at + INSTANT
     return start_at, end_at, False
+
+
+def classify_deadline(component, source_name: Optional[str] = None) -> bool:
+    """Is this item something due (an assignment) rather than an event?
+    Conservative: strong evidence wins (a VTODO, a Canvas assignment UID or
+    URL, an LMS assignment/quiz link); title words count only together with
+    an LMS source (the URL, UID or the subscription's name). Anything
+    uncertain stays an ordinary event."""
+    if component.name == "VTODO":
+        return True
+    uid = str(component.get("UID", "")).strip()
+    url = str(component.get("URL", "")).strip()
+    if _CANVAS_EVENT_UID.match(uid):
+        return False
+    if _CANVAS_DEADLINE_UID.match(uid) or (url and _DEADLINE_URL.search(url)):
+        return True
+    summary = str(component.get("SUMMARY", ""))
+    from_lms = any(_LMS_SOURCE.search(x) for x in (source_name or "", url, uid))
+    return from_lms and bool(_DEADLINE_WORDS.search(summary))
+
+
+def _external_completion(component, tz: ZoneInfo) -> tuple:
+    """(completed, completed_at) as the item states it, or (None, None).
+    Only VTODOs carry completion in iCalendar; VEVENT STATUS is about the
+    event itself (CANCELLED is cancellation, not completion)."""
+    if component.name != "VTODO":
+        return None, None
+    status = str(component.get("STATUS", "")).upper()
+    completed_at = _decoded(component, "COMPLETED")
+    if isinstance(completed_at, datetime):
+        completed_at = _local(completed_at, tz)
+    else:
+        completed_at = None
+    try:
+        percent = int(component.get("PERCENT-COMPLETE")) if "PERCENT-COMPLETE" in component else None
+    except (TypeError, ValueError):
+        percent = None
+    if status == "COMPLETED" or completed_at is not None or percent == 100:
+        return True, completed_at
+    if status in ("NEEDS-ACTION", "IN-PROCESS") or (percent is not None and percent < 100):
+        return False, None
+    return None, None
 
 
 def _exdates(component, tz: ZoneInfo) -> List[str]:
@@ -207,10 +280,11 @@ def _validate_bytes(data: bytes) -> str:
     return text
 
 
-def parse(data: bytes, tz: ZoneInfo) -> List[ParsedEvent]:
+def parse(data: bytes, tz: ZoneInfo, source_name: Optional[str] = None) -> List[ParsedEvent]:
     """Every event in the calendar, one ParsedEvent per UID. Raises
     IcsError if the data as a whole can't be read; individual events that
-    can't be used (no start time) are skipped."""
+    can't be used (no start time) are skipped. source_name (the
+    subscription's name) is evidence for classify_deadline."""
     text = _validate_bytes(data)
     try:
         cal = icalendar.Calendar.from_ical(text)
@@ -234,6 +308,21 @@ def parse(data: bytes, tz: ZoneInfo) -> List[ParsedEvent]:
             instances.setdefault(uid, []).append((recurrence, component, start_at, end_at, all_day, title))
             continue
 
+        # Deadlines: single items only (a recurring series can't be checked
+        # off as a whole), and never a multi-day all-day range (a break).
+        deadline = (
+            "RRULE" not in component
+            and not (all_day and end_at - start_at > timedelta(days=1))
+            and classify_deadline(component, source_name)
+        )
+        if deadline and all_day:
+            # Due on that date: at 11:59 PM wall-clock in the app timezone
+            # (times are stored as naive local times, so DST is implicit).
+            start_at = datetime.combine(start_at.date(), DATE_ONLY_DUE)
+            end_at = start_at + INSTANT
+            all_day = False
+        completed, completed_at = _external_completion(component, tz) if deadline else (None, None)
+
         event = ParsedEvent(
             uid=uid,
             title=title,
@@ -245,6 +334,9 @@ def parse(data: bytes, tz: ZoneInfo) -> List[ParsedEvent]:
             url=_text(component, "URL", 2000),
             status=_status(component),
             sequence=_sequence(component),
+            deadline=deadline,
+            external_completed=completed,
+            external_completed_at=completed_at,
         )
         raw_rule = _rrule(component, tz)
         if raw_rule:

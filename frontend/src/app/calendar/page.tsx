@@ -258,7 +258,7 @@ export default function CalendarPage() {
                       <span key={`${o.event_id}-${o.occurrence_date}`} className="flex items-center gap-1 truncate rounded bg-surface-2 px-1 py-px text-[11px] leading-4 text-fg">
                         <span className={`h-3 w-0.5 shrink-0 rounded-full bg-current ${eventHue(o.category)}`} aria-hidden />
                         {!o.all_day && <span className="shrink-0 font-mono text-fg-muted">{compactTime(o.start_at)}</span>}
-                        <span className="truncate">{o.title}</span>
+                        <span className={`truncate ${o.completed ? "text-fg-faint line-through" : ""}`}>{o.title}</span>
                       </span>
                     ))}
                     {shownTasks.map((t) => (

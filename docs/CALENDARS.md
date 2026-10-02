@@ -66,8 +66,8 @@ Settings (env vars, normally left alone): `CALENDAR_SYNC_ENABLED` (default
 | `UID` | Identity (with the subscription) |
 | `SUMMARY`, `DESCRIPTION`, `LOCATION`, `URL` | Title, notes, location, "Open source" link |
 | `DTSTART`/`DTEND`/`DURATION` | Start/end, converted to `APP_TIMEZONE` (UTC and `TZID` times are converted, floating times kept) |
-| `DATE` values | All-day events |
-| Start with no end (e.g. Canvas due dates) | A deadline at that time |
+| `DATE` values | All-day events, unless the item is a deadline (below) |
+| Start with no end (e.g. Canvas due dates) | An instant at that time |
 | `VTODO` with `DUE` | A deadline at the due time |
 | `RRULE`, `EXDATE` | A recurring series with skipped dates |
 | `RECURRENCE-ID` instances | Changes to (or cancellations of) single dates of the series |
@@ -76,6 +76,80 @@ Settings (env vars, normally left alone): `CALENDAR_SYNC_ENABLED` (default
 
 Rules Look can't represent (more than once a day, e.g. `FREQ=HOURLY`) are
 imported as their first occurrence, with a warning in the sync result.
+
+## Deadlines (assignments)
+
+Some imported items are things due rather than events. Look classifies
+them conservatively (`classify_deadline` in `backend/app/services/ics.py`).
+An item is a deadline if any of these holds:
+
+- it's a `VTODO`;
+- its UID is a Canvas assignment: `event-assignment-<id>`,
+  `event-assignment-override-<id>` or `event-sub-assignment-<id>`;
+- its URL points at an assignment (`#assignment_<id>`, or an LMS
+  `/assignments/<id>`, `/quizzes/<id>` or `/discussion_topics/<id>` link);
+- its title has assignment wording (homework, quiz, problem set, due, and
+  so on) **and** it comes from an LMS: Canvas, Blackboard, Moodle and
+  similar, recognized from the URL, the UID or the subscription's name.
+
+Never deadlines:
+- Canvas calendar events (`event-calendar-event-<id>`, e.g. "Fall Break")
+- multi-day all-day ranges
+- recurring series
+
+When in doubt an item stays an ordinary event.
+
+**Date-only deadlines are due at 11:59 PM.** Canvas exports an assignment
+due at 11:59 PM as a date-only `DTSTART` with no `DTEND`, so a date-only
+deadline becomes due at 23:59 on that date. That's wall-clock time in
+`APP_TIMEZONE`: event times are stored as naive local times, so daylight
+saving is handled by construction and there's no fixed UTC offset. The
+deadline is stored as an instant (one minute long) and shown as
+"11:59 PM". Canvas also exports assignments due at exactly 12:00 AM as
+date-only, and those can't be told apart from 11:59 PM ones in the feed.
+Timed deadlines (`DTSTART == DTEND`) keep their time.
+
+### Checking them off
+
+Deadlines get a checkbox in the Calendar's day panel, the event details,
+and Today ("Assignments due today", next to your tasks). Checking one off
+changes nothing else: the event stays feed-managed and read-only.
+Completion isn't cancellation; a cancelled assignment shows as cancelled
+and can't be checked off.
+
+| Field | Meaning |
+|---|---|
+| `is_deadline` | Classified as something due |
+| `completed_at` | Set = done (`completed` in the API) |
+| `completion_source` | `local` (you checked it) or `external` (the source said so) |
+| `external_completed` | What the source last stated explicitly (`null` = it never said) |
+
+**Syncs never erase a checkmark.** Completion isn't part of the
+feed-owned fields or their change hash. A sync only touches it when the
+feed states completion explicitly *and* that statement changed since the
+last sync:
+
+| The feed says | Result |
+|---|---|
+| Nothing (every Canvas feed, every `VEVENT`) | Completion untouched |
+| The same as last sync | Untouched (so unchecking something stays unchecked) |
+| Now completed | Checked off, source `external`, unless it's already checked |
+| Now not completed | Unchecked only if the source was what checked it; your own checkmark stays |
+
+Explicit completion comes only from `VTODO`s: `STATUS:COMPLETED`, a
+`COMPLETED` time, or `PERCENT-COMPLETE:100`. `STATUS:NEEDS-ACTION` or
+`IN-PROCESS` and `PERCENT-COMPLETE` below 100 mean "not completed".
+
+**Canvas doesn't send completion.** Its calendar feed has no submission
+or completion information at all: no `STATUS`, no `COMPLETED`, no
+`PERCENT-COMPLETE`, and no `VTODO`s. Checking Canvas assignments off is
+therefore up to you. Automatic completion would need Canvas to expose it,
+for example a future Canvas API integration that sets `external_completed`
+through the same rules.
+
+API: `POST /api/events/{id}/complete` and `POST /api/events/{id}/uncomplete`
+(deadlines only; anything else returns 422). MCP: `get_deadlines` and
+`set_deadline_completed`.
 
 ## Imported events are read-only
 

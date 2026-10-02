@@ -124,6 +124,10 @@ def _occ(
         overridden=override is not None,
         cancelled=bool(override is not None and override.cancelled) or event.external_status is not None,
         read_only=event.subscription_id is not None,
+        deadline=event.is_deadline,
+        completed=event.completed_at is not None,
+        completed_at=event.completed_at,
+        completion_source=event.completion_source,
         subscription_id=event.subscription_id,
         external_url=event.external_url,
         external_status=event.external_status,
@@ -189,6 +193,26 @@ def ensure_editable(session: Session, event: Event) -> None:
         "change it in the source calendar (it syncs back), or remove the subscription "
         "and keep its events to make them editable."
     )
+
+
+def set_completed(session: Session, event: Event, completed: bool) -> Event:
+    """Check off (or un-check) a deadline. The one change allowed on an
+    imported event: completion is Look's own state, not the feed's, and a
+    sync never clears it (see calendar_sync._reconcile_completion)."""
+    if not event.is_deadline:
+        raise ValueError(
+            f"'{event.title}' is an event, not a deadline; only assignments and other things due can be checked off."
+        )
+    if completed and event.completed_at is None:
+        event.completed_at = utcnow()
+        event.completion_source = "local"
+    elif not completed:
+        event.completed_at = None
+        event.completion_source = None
+    session.add(event)
+    session.commit()
+    session.refresh(event)
+    return event
 
 
 def create_event(session: Session, payload: EventCreate, source: str = "manual") -> Event:

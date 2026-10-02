@@ -1,7 +1,7 @@
 from datetime import date, datetime, time, timezone
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
 
 from app.models.enums import CalendarSourceType, LeetCodeDifficulty, MealType, RecurrencePattern, TaskPriority, TaskStatus
 
@@ -378,6 +378,15 @@ class EventRead(BaseModel):
     external_url: Optional[str] = None
     external_status: Optional[str] = None  # "cancelled" | "removed" | None
     last_synced_at: Optional[datetime] = None
+    # Deadlines (imported assignments) can be checked off.
+    is_deadline: bool = False
+    completed_at: Optional[datetime] = None
+    completion_source: Optional[str] = None  # "local" | "external"
+
+    @computed_field
+    @property
+    def completed(self) -> bool:
+        return self.completed_at is not None
 
 
 class Occurrence(BaseModel):
@@ -403,6 +412,12 @@ class Occurrence(BaseModel):
     subscription_name: Optional[str] = None
     external_url: Optional[str] = None
     external_status: Optional[str] = None
+    # Something due that can be checked off (completed is separate from
+    # cancelled: a cancelled assignment isn't a finished one).
+    deadline: bool = False
+    completed: bool = False
+    completed_at: Optional[datetime] = None
+    completion_source: Optional[str] = None
 
 
 class EventWithContext(BaseModel):

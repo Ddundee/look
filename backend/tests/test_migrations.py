@@ -87,10 +87,11 @@ def seed_core(session: Session) -> None:
 
 
 def seed_new_features(session: Session) -> None:
-    # Core insert of the baseline's event columns only: this also seeds
-    # databases at older revisions, whose events table lacks later columns.
+    # Core insert into the events table as the database has it (reflected),
+    # so this also seeds databases at older revisions that lack later columns.
     event_id = "evt-cs101"
-    session.execute(sa.insert(Event.__table__).values(
+    events = sa.Table("events", sa.MetaData(), autoload_with=session.connection())
+    session.execute(sa.insert(events).values(
         id=event_id, title="CS 101", category="class", location="Hall A", notes=None, all_day=False,
         start_at=datetime(2026, 8, 24, 10, 0), end_at=datetime(2026, 8, 24, 10, 50),
         rrule="FREQ=WEEKLY;BYDAY=MO,WE,FR;UNTIL=20261212T235959", exdates=["2026-11-27"], source="manual",
@@ -117,8 +118,8 @@ def add_legacy_recruiting_table(engine) -> None:
 def snapshot(engine, tables=None):
     """Every row of every (given) model table, normalized for comparison.
     Only columns the database has at its current revision are read, and
-    null values are left out, so a row compares equal across a revision
-    that only added nullable columns (and left them empty)."""
+    null and false values are left out, so a row compares equal across a
+    revision that only added nullable or default-false columns."""
     insp = sa.inspect(engine)
     out = {}
     with engine.connect() as conn:
@@ -128,7 +129,9 @@ def snapshot(engine, tables=None):
             model = SQLModel.metadata.tables[name]
             present = [model.c[c["name"]] for c in insp.get_columns(name) if c["name"] in model.c]
             rows = conn.execute(sa.select(*present)).mappings().all()
-            out[name] = sorted(repr(sorted((k, v) for k, v in dict(r).items() if v is not None)) for r in rows)
+            out[name] = sorted(
+                repr(sorted((k, v) for k, v in dict(r).items() if v is not None and v is not False)) for r in rows
+            )
     return out
 
 
@@ -343,7 +346,7 @@ def test_calendar_subscription_migration_keeps_existing_events(db):
         session.commit()
     before = snapshot(db, BASELINE_TABLES)
 
-    assert migrations.migrate(db) == migrations.head_revision() == "0003_calendar_subscriptions"
+    assert migrations.migrate(db) == migrations.head_revision()
     assert snapshot(db, BASELINE_TABLES) == before  # new event columns are all null
     with db.connect() as conn:
         assert conn.execute(sa.text("SELECT COUNT(*) FROM events WHERE subscription_id IS NULL")).scalar() == 1
@@ -352,7 +355,7 @@ def test_calendar_subscription_migration_keeps_existing_events(db):
     migrations.downgrade(db, "0002_add_leetcode_tracking")  # no subscriptions: allowed
     assert "calendar_subscriptions" not in tables_in(db)
     assert snapshot(db, BASELINE_TABLES) == before
-    assert migrations.migrate(db) == "0003_calendar_subscriptions"
+    assert migrations.migrate(db) == migrations.head_revision()
 
 
 def test_calendar_downgrade_with_subscriptions_needs_explicit_flag(db):
@@ -369,3 +372,44 @@ def test_calendar_downgrade_with_subscriptions_needs_explicit_flag(db):
     assert "calendar_subscriptions" in tables_in(db)
     migrations.downgrade(db, "0002_add_leetcode_tracking", allow_data_loss=True)
     assert "calendar_subscriptions" not in tables_in(db)
+
+
+# ---- 0004: deadline completion --------------------------------------------
+
+
+def test_deadline_completion_migration_is_additive(db):
+    with db.begin() as conn:
+        command.upgrade(migrations.alembic_config(conn), "0003_calendar_subscriptions")
+    with Session(db) as session:
+        seed_core(session)
+        seed_new_features(session)
+        session.commit()
+    before = snapshot(db, BASELINE_TABLES)
+
+    assert migrations.migrate(db) == "0004_event_deadline_completion"
+    assert snapshot(db, BASELINE_TABLES) == before
+    with db.connect() as conn:
+        row = conn.execute(sa.text(
+            "SELECT is_deadline, completed_at, completion_source, external_completed FROM events"
+        )).one()
+    assert (bool(row[0]), row[1], row[2], row[3]) == (False, None, None, None)
+    migrations.check_drift(db)
+
+    migrations.downgrade(db, "0003_calendar_subscriptions")  # nothing checked off: allowed
+    cols = {c["name"] for c in sa.inspect(db).get_columns("events")}
+    assert not cols & {"is_deadline", "completed_at", "completion_source", "external_completed"}
+    assert "subscription_id" in cols  # 0003's columns untouched
+    assert snapshot(db, BASELINE_TABLES) == before
+
+
+def test_deadline_downgrade_with_checkmarks_needs_explicit_flag(db):
+    migrations.migrate(db)
+    with Session(db) as session:
+        seed_new_features(session)
+        session.commit()
+    with db.begin() as conn:
+        conn.execute(sa.text("UPDATE events SET is_deadline = true, completed_at = CURRENT_TIMESTAMP"))
+    with pytest.raises(RuntimeError, match="allow-data-loss"):
+        migrations.downgrade(db, "0003_calendar_subscriptions")
+    migrations.downgrade(db, "0003_calendar_subscriptions", allow_data_loss=True)
+    assert "completed_at" not in {c["name"] for c in sa.inspect(db).get_columns("events")}

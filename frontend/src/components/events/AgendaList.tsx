@@ -4,6 +4,7 @@ import { ArrowsClockwiseIcon, CalendarDotsIcon, MapPinIcon } from "@phosphor-ico
 import { eventHue, isInstant, timeLabel } from "@/lib/calendarEvents";
 import type { Occurrence } from "@/lib/types";
 import { CARD_LIST } from "@/lib/ui";
+import DeadlineCheckbox from "./DeadlineCheckbox";
 
 /** Time-ordered events for a day. Each row opens the event. */
 export default function AgendaList({
@@ -19,11 +20,22 @@ export default function AgendaList({
   return (
     <ul className={`anim-stagger ${bare ? "" : CARD_LIST}`}>
       {occurrences.map((o, i) => (
-        <li key={`${o.event_id}-${o.occurrence_date}`} style={{ "--i": i } as React.CSSProperties}>
+        <li
+          key={`${o.event_id}-${o.occurrence_date}`}
+          style={{ "--i": i } as React.CSSProperties}
+          className="flex items-start rounded-lg transition-colors duration-150 hover:bg-surface-2/70 focus-within:bg-surface-2/70"
+        >
+          {/* Deadlines (imported assignments) can be checked off like tasks;
+              a cancelled one can't, completion isn't cancellation. */}
+          {o.deadline && !o.cancelled && (
+            <span className="pl-3 pt-[11px]">
+              <DeadlineCheckbox eventId={o.event_id} title={o.title} completed={o.completed} />
+            </span>
+          )}
           <button
             type="button"
             onClick={() => onOpen(o)}
-            className="flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left transition-colors duration-150 hover:bg-surface-2/70"
+            className="flex min-w-0 flex-1 items-start gap-3 px-3 py-2.5 text-left"
           >
             <span className="w-[4.5rem] shrink-0 font-mono text-xs leading-5 tabular-nums text-fg-muted">
               {o.all_day ? (
@@ -39,7 +51,11 @@ export default function AgendaList({
             <span className="min-w-0 flex-1">
               <span
                 className={`block text-sm leading-5 [overflow-wrap:anywhere] ${
-                  o.cancelled ? "text-fg-faint line-through" : "text-fg"
+                  o.cancelled
+                    ? "text-fg-faint line-through"
+                    : o.completed
+                      ? "text-fg-faint line-through decoration-fg-faint/60"
+                      : "text-fg"
                 }`}
               >
                 {o.title}
@@ -69,6 +85,10 @@ export default function AgendaList({
                   <span className="text-fg-faint">Removed from feed</span>
                 ) : o.cancelled ? (
                   <span className="font-medium text-danger">Cancelled</span>
+                ) : o.completed ? (
+                  <span className="text-fg-faint">
+                    Done{o.completion_source === "external" && o.subscription_name ? ` in ${o.subscription_name}` : ""}
+                  </span>
                 ) : o.overridden ? (
                   <span className="text-fg-faint">Changed for this date</span>
                 ) : null}
