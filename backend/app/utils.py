@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from app.config import get_settings
@@ -16,6 +16,12 @@ def local_today() -> date:
     on the wrong day."""
     settings = get_settings()
     return datetime.now(ZoneInfo(settings.app_timezone)).date()
+
+
+def week_start(day: date) -> date:
+    """The Monday of the calendar week (Mon-Sun) containing `day`. Weeks
+    are Monday-to-Sunday throughout Look (frontend: lib/week.ts)."""
+    return day - timedelta(days=day.weekday())
 
 
 def local_now() -> datetime:

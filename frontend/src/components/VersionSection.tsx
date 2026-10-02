@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { ArrowsClockwiseIcon, CircleNotchIcon, PackageIcon } from "@phosphor-icons/react";
 import { api } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import { toast } from "@/lib/toast";
 import type { UpdateStatus } from "@/lib/types";
 import { BUTTON_SECONDARY, CARD, MUTED, SECTION_HEADING } from "@/lib/ui";
-import { CHECK_UPDATE_EVENT } from "./UpdateChecker";
+import { CHECK_UPDATE_EVENT, updateFlow } from "./UpdateChecker";
 
 function short(sha: string | null | undefined): string | null {
   return sha ? sha.slice(0, 7) : null;
@@ -19,6 +19,9 @@ export default function VersionSection() {
   const [revision, setRevision] = useState<string | null | undefined>(undefined);
   const [status, setStatus] = useState<UpdateStatus | null>(null);
   const [checking, setChecking] = useState(false);
+  // Same state as the update toast: while it runs, say so and don't offer
+  // another check (which would just reopen the toast).
+  const updating = useSyncExternalStore(updateFlow.subscribe, updateFlow.isRunning, () => false);
 
   useEffect(() => {
     api
@@ -48,7 +51,9 @@ export default function VersionSection() {
   }
 
   const latest = status?.latest ?? null;
-  const stateLine = !status
+  const stateLine = updating
+    ? "Updating Look…"
+    : !status
     ? "Checking"
     : !status.enabled
       ? "Updates aren't set up on this server."
@@ -89,13 +94,13 @@ export default function VersionSection() {
           </dd>
         </dl>
         {status?.enabled !== false && (
-          <button onClick={checkNow} disabled={checking} className={`h-9 py-0 text-[13px] ${BUTTON_SECONDARY}`}>
-            {checking ? (
+          <button onClick={checkNow} disabled={checking || updating} className={`h-9 py-0 text-[13px] ${BUTTON_SECONDARY}`}>
+            {checking || updating ? (
               <CircleNotchIcon className="h-4 w-4 animate-spin" aria-hidden />
             ) : (
               <ArrowsClockwiseIcon className="h-4 w-4" aria-hidden />
             )}
-            Check for updates
+            {updating ? "Updating…" : "Check for updates"}
           </button>
         )}
       </div>

@@ -40,7 +40,7 @@ from app.schemas import (
     LeetCodeTopicStat,
     LeetCodeTopicStats,
 )
-from app.utils import local_now, local_today, utcnow
+from app.utils import local_now, local_today, utcnow, week_start
 
 DEFAULT_DAILY_TARGET = 2
 DEFAULT_WEEKLY_TARGET = 10
@@ -441,7 +441,7 @@ def _insights(rows: List[LeetCodeTopicStat], overall_hint_rate: Optional[float])
 def stats(session: Session) -> LeetCodeStats:
     attempts, problems = _all(session)
     today = local_today()
-    week_start = today - timedelta(days=today.weekday())
+    this_week = week_start(today)
 
     solved_attempts = [a for a in attempts if a.solved]
     solved_problem_ids = {a.problem_id for a in solved_attempts}
@@ -466,8 +466,8 @@ def stats(session: Session) -> LeetCodeStats:
         current_streak=current,
         best_streak=best,
         solved_today=sum(1 for a in solved_attempts if a.attempted_at.date() == today),
-        solved_this_week=sum(1 for a in solved_attempts if week_start <= a.attempted_at.date() <= today),
-        week_start=week_start,
+        solved_this_week=sum(1 for a in solved_attempts if this_week <= a.attempted_at.date() <= today),
+        week_start=this_week,
         goals=get_goals(session),
         insights=_insights(_topic_rows(attempts, problems), hint_rate),
     )

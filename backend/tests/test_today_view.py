@@ -1,5 +1,7 @@
 from datetime import timedelta
 
+import pytest
+
 from app.models.enums import RecurrencePattern, TaskPriority
 from app.schemas import RecurringTaskCreate, TaskCreate
 from app.services import recurrence as recurrence_service
@@ -70,3 +72,24 @@ def test_week_summary_counts_completed_tasks(session):
     summary = tasks_service.get_week_summary(session, start)
     assert summary["completed_count"] == 1
     assert summary["completed_by_category"].get("personal") == 1
+
+
+@pytest.mark.parametrize(
+    "given, monday",
+    [
+        ("2026-10-05", "2026-10-05"),  # Monday
+        ("2026-10-06", "2026-10-05"),  # Tuesday
+        ("2026-10-11", "2026-10-05"),  # Sunday
+        ("2026-10-01", "2026-09-28"),  # week crossing a month
+        ("2027-01-01", "2026-12-28"),  # week crossing a year
+    ],
+)
+def test_week_start_and_summary_use_monday_to_sunday(session, given, monday):
+    from datetime import date
+
+    from app.utils import week_start
+
+    assert week_start(date.fromisoformat(given)) == date.fromisoformat(monday)
+    summary = tasks_service.get_week_summary(session, date.fromisoformat(given))
+    assert summary["start_date"] == date.fromisoformat(monday)
+    assert summary["end_date"] == date.fromisoformat(monday) + timedelta(days=6)

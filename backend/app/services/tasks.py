@@ -8,7 +8,7 @@ from app.models.task import Task
 from app.schemas import TaskCreate, TaskRead, TaskUpdate
 from app.services import recurrence as recurrence_service
 from app.services.priority import compute_priority
-from app.utils import local_today, utcnow
+from app.utils import local_today, utcnow, week_start
 
 ACTIVE_STATUSES = (
     TaskStatus.inbox,
@@ -293,7 +293,8 @@ def get_today_bundle(session: Session, today: Optional[date] = None) -> dict:
 
 
 def get_week_summary(session: Session, start_date: Optional[date] = None) -> dict:
-    start_date = start_date or (local_today() - timedelta(days=local_today().weekday()))
+    # Always a calendar week: any date in it means that Monday-to-Sunday week.
+    start_date = week_start(start_date or local_today())
     end_date = start_date + timedelta(days=6)
 
     completed = list(
