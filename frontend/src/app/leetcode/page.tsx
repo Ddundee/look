@@ -16,12 +16,12 @@ import { formatDate, relativeDueLabel } from "@/lib/format";
 import { CONFIDENCE_LABEL, DIFFICULTIES, DIFFICULTY_LABEL, DIFFICULTY_TEXT, pct } from "@/lib/leetcode";
 import { toast, toastError } from "@/lib/toast";
 import type { LeetCodeAttempt, LeetCodeStats, LeetCodeTopicStats } from "@/lib/types";
-import { BUTTON_GHOST_SM, BUTTON_PRIMARY, BUTTON_SECONDARY, CARD, CARD_LIST, FIELD, ICON_BUTTON, SECTION_HEADING } from "@/lib/ui";
-import { EmptyState, ErrorState, PageHeader, TaskListSkeleton } from "@/components/PageParts";
+import { BUTTON_GHOST_SM, BUTTON_PRIMARY, BUTTON_SECONDARY, CARD, FIELD, ICON_BUTTON } from "@/lib/ui";
+import { EmptyState, ErrorState, Page, PageHeader, Panel, TaskListSkeleton } from "@/components/PageParts";
 import AttemptModal from "@/components/leetcode/AttemptModal";
 import GoalsModal from "@/components/leetcode/GoalsModal";
 
-const SELECT = `h-9 pr-8 ${FIELD}`;
+const SELECT = `h-8 pr-8 text-[13px] ${FIELD}`;
 
 function Meter({ value, target }: { value: number; target: number }) {
   const width = target > 0 ? Math.min(100, (value / target) * 100) : 0;
@@ -34,7 +34,7 @@ function Meter({ value, target }: { value: number; target: number }) {
 
 function Stat({ label, value, sub, children }: { label: string; value: React.ReactNode; sub?: React.ReactNode; children?: React.ReactNode }) {
   return (
-    <div className="min-w-0 px-5 py-4">
+    <div className="min-w-0 px-5 py-3">
       <div className="text-[13px] text-fg-muted">{label}</div>
       <div className="mt-1 font-mono text-2xl font-medium tabular-nums tracking-tight text-fg">{value}</div>
       {sub && <div className="mt-0.5 text-xs text-fg-faint">{sub}</div>}
@@ -180,7 +180,7 @@ export default function LeetCodePage() {
   const goals = stats?.goals;
 
   return (
-    <div>
+    <Page>
       <PageHeader
         title="LeetCode"
         subtitle="What you actually solved. Plans stay in your tasks."
@@ -224,190 +224,195 @@ export default function LeetCodePage() {
           confidence 3/5.&rdquo;
         </EmptyState>
       ) : (
-        <div className="space-y-10">
-          <section aria-label="Progress" className={`anim-fade-up grid grid-cols-2 divide-line overflow-hidden sm:grid-cols-4 sm:divide-x ${CARD}`}>
-            <Stat label="Today" value={`${stats.solved_today}/${stats.goals.daily_target}`} sub="solved vs daily goal">
-              <Meter value={stats.solved_today} target={stats.goals.daily_target} />
-            </Stat>
-            <Stat label="This week" value={`${stats.solved_this_week}/${stats.goals.weekly_target}`} sub={`since ${formatDate(stats.week_start)}`}>
-              <Meter value={stats.solved_this_week} target={stats.goals.weekly_target} />
-            </Stat>
-            <Stat
-              label="Streak"
-              value={
-                <span className="inline-flex items-center gap-1.5">
-                  {stats.current_streak}
-                  {stats.current_streak > 0 && <FireIcon weight="fill" className="h-5 w-5 text-warn" aria-hidden />}
-                </span>
+        <>
+        <section aria-label="Progress" className={`anim-fade-up grid shrink-0 grid-cols-2 divide-line overflow-hidden sm:grid-cols-4 sm:divide-x ${CARD}`}>
+          <Stat label="Today" value={`${stats.solved_today}/${stats.goals.daily_target}`} sub="solved vs daily goal">
+            <Meter value={stats.solved_today} target={stats.goals.daily_target} />
+          </Stat>
+          <Stat label="This week" value={`${stats.solved_this_week}/${stats.goals.weekly_target}`} sub={`since ${formatDate(stats.week_start)}`}>
+            <Meter value={stats.solved_this_week} target={stats.goals.weekly_target} />
+          </Stat>
+          <Stat
+            label="Streak"
+            value={
+              <span className="inline-flex items-center gap-1.5">
+                {stats.current_streak}
+                {stats.current_streak > 0 && <FireIcon weight="fill" className="h-5 w-5 text-warn" aria-hidden />}
+              </span>
+            }
+            sub={`day${stats.current_streak === 1 ? "" : "s"}, best ${stats.best_streak}`}
+          />
+          <Stat label="Solved" value={stats.total_solved} sub={`problems, ${stats.total_attempts} attempts`} />
+        </section>
+
+          <div className="grid gap-4 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+            <Panel
+              title="Recent attempts"
+              icon={CodeIcon}
+              count={attempts?.length}
+              labelledBy="lc-recent"
+              actions={
+                <div className="flex flex-wrap items-center gap-2">
+                  <select aria-label="Filter by difficulty" value={difficulty} onChange={(e) => setDifficulty(e.target.value)} className={SELECT}>
+                    <option value="">Any difficulty</option>
+                    {DIFFICULTIES.map((d) => (
+                      <option key={d} value={d}>
+                        {DIFFICULTY_LABEL[d]}
+                      </option>
+                    ))}
+                  </select>
+                  <select aria-label="Filter by topic" value={topic} onChange={(e) => setTopic(e.target.value)} className={SELECT}>
+                    <option value="">Any topic</option>
+                    {knownTopics.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                  <select aria-label="Filter by result" value={result} onChange={(e) => setResult(e.target.value)} className={SELECT}>
+                    <option value="">Any result</option>
+                    <option value="solved">Solved</option>
+                    <option value="unsolved">Not solved</option>
+                  </select>
+                  {filtered && (
+                    <button
+                      onClick={() => {
+                        setDifficulty("");
+                        setTopic("");
+                        setResult("");
+                      }}
+                      className={`h-8 ${BUTTON_GHOST_SM}`}
+                    >
+                      <XIcon className="h-3.5 w-3.5" aria-hidden />
+                      Clear
+                    </button>
+                  )}
+                </div>
               }
-              sub={`day${stats.current_streak === 1 ? "" : "s"}, best ${stats.best_streak}`}
-            />
-            <Stat label="Solved" value={stats.total_solved} sub={`problems, ${stats.total_attempts} attempts`} />
-          </section>
+            >
+              {attempts === null ? (
+                <TaskListSkeleton rows={3} className="" />
+              ) : attempts.length === 0 ? (
+                <p className="flex h-full min-h-32 items-center justify-center px-4 text-center text-sm text-fg-faint">
+                  No attempts match these filters.
+                </p>
+              ) : (
+                <ul className="anim-stagger">
+                  {attempts.map((a, i) => (
+                    <AttemptRow key={a.id} attempt={a} index={i} onDeleted={refresh} />
+                  ))}
+                </ul>
+              )}
+            </Panel>
 
-          <section aria-labelledby="lc-breakdown" className="anim-fade-up">
-            <h2 id="lc-breakdown" className={SECTION_HEADING}>
-              Difficulty and habits
-            </h2>
-            <div className={`grid grid-cols-1 gap-y-4 p-5 sm:grid-cols-2 sm:gap-x-8 ${CARD}`}>
-              <dl className="grid grid-cols-3 gap-3">
-                {DIFFICULTIES.map((d) => (
-                  <div key={d}>
-                    <dt className={`text-[13px] font-medium ${DIFFICULTY_TEXT[d]}`}>{DIFFICULTY_LABEL[d]}</dt>
-                    <dd className="mt-1 font-mono text-xl tabular-nums text-fg">{stats.solved_by_difficulty[d]}</dd>
-                  </div>
-                ))}
-              </dl>
-              <dl className="grid grid-cols-3 gap-3 sm:border-l sm:border-line sm:pl-8">
-                <div>
-                  <dt className="text-[13px] text-fg-muted">Avg time</dt>
-                  <dd className="mt-1 font-mono text-xl tabular-nums text-fg">
-                    {stats.avg_solve_minutes === null ? "-" : `${Math.round(stats.avg_solve_minutes)}m`}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-[13px] text-fg-muted">Hints</dt>
-                  <dd className="mt-1 font-mono text-xl tabular-nums text-fg">{pct(stats.hint_usage_rate)}</dd>
-                </div>
-                <div>
-                  <dt className="text-[13px] text-fg-muted">On your own</dt>
-                  <dd className="mt-1 font-mono text-xl tabular-nums text-fg">{pct(stats.independent_solve_rate)}</dd>
-                </div>
-              </dl>
-            </div>
-          </section>
-
-          {stats.insights.length > 0 && (
-            <section aria-label="Insights" className="anim-fade-up">
-              <ul className={`space-y-2 p-5 ${CARD}`}>
-                {stats.insights.map((line) => (
-                  <li key={line} className="flex items-start gap-2.5 text-sm leading-relaxed text-fg">
-                    <LightbulbIcon weight="duotone" className="mt-0.5 h-4 w-4 shrink-0 text-accent" aria-hidden />
-                    {line}
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-
-          {topics.topics.length > 0 && (
-            <section aria-labelledby="lc-topics" className="anim-fade-up">
-              <h2 id="lc-topics" className={SECTION_HEADING}>
-                Topics
-                <span className="font-normal text-fg-faint">weakest first, from each topic&apos;s last {topics.recent_window} attempts</span>
-              </h2>
-              <ul className={CARD_LIST}>
-                {topics.topics.map((t) => {
-                  const weak = topics.weakest.includes(t.topic);
-                  return (
-                    <li key={t.topic}>
-                      <button
-                        type="button"
-                        onClick={() => setTopic(topic === t.topic ? "" : t.topic)}
-                        aria-pressed={topic === t.topic}
-                        className={`flex w-full items-start gap-4 rounded-lg px-3 py-2.5 text-left transition-colors duration-150 hover:bg-surface-2/70 ${
-                          topic === t.topic ? "bg-accent-soft" : ""
-                        }`}
-                      >
-                        <span className="min-w-0 flex-1">
-                          <span className="flex flex-wrap items-center gap-2 text-sm text-fg">
-                            {t.topic}
-                            {weak && <span className="rounded-md bg-warn-soft px-1.5 py-px text-[11px] font-medium text-warn">Needs work</span>}
-                          </span>
-                          <span className="mt-0.5 block text-xs leading-relaxed text-fg-muted">{t.reasons.join(", ")}</span>
-                        </span>
-                        <span className="shrink-0 text-right">
-                          <span className="block font-mono text-sm tabular-nums text-fg">
-                            {t.solved_problems}/{t.problems}
-                          </span>
-                          <span className="block text-[11px] text-fg-faint">solved</span>
-                        </span>
-                        <span className="w-20 shrink-0 pt-1.5" aria-hidden={t.weakness === null}>
-                          {t.weakness === null ? (
-                            <span className="block text-right text-[11px] text-fg-faint">not rated</span>
-                          ) : (
-                            <>
-                              <span className="block h-1.5 overflow-hidden rounded-full bg-surface-2">
-                                <span
-                                  className={`block h-full rounded-full ${weak ? "bg-warn" : "bg-accent"}`}
-                                  style={{ width: `${Math.max(4, t.weakness * 100)}%` }}
-                                />
-                              </span>
-                              <span className="mt-1 block text-right text-[11px] text-fg-faint">
-                                weakness <span className="font-mono tabular-nums">{Math.round(t.weakness * 100)}</span>
-                              </span>
-                            </>
-                          )}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
-          )}
-
-          <section aria-labelledby="lc-recent">
-            <div className="flex flex-wrap items-center justify-between gap-2 px-1 pb-2">
-              <h2 id="lc-recent" className="text-[13px] font-medium text-fg-muted">
-                Recent attempts
-              </h2>
-              <div className="flex flex-wrap items-center gap-2">
-                <select aria-label="Filter by difficulty" value={difficulty} onChange={(e) => setDifficulty(e.target.value)} className={SELECT}>
-                  <option value="">Any difficulty</option>
+            <div className="flex flex-col gap-4 lg:min-h-0">
+              <section aria-labelledby="lc-breakdown" className={`anim-fade-up shrink-0 p-4 ${CARD}`}>
+                <h2 id="lc-breakdown" className="sr-only">
+                  Difficulty and habits
+                </h2>
+                <dl className="grid grid-cols-3 gap-3">
                   {DIFFICULTIES.map((d) => (
-                    <option key={d} value={d}>
-                      {DIFFICULTY_LABEL[d]}
-                    </option>
+                    <div key={d}>
+                      <dt className={`text-[13px] font-medium ${DIFFICULTY_TEXT[d]}`}>{DIFFICULTY_LABEL[d]}</dt>
+                      <dd className="mt-0.5 font-mono text-lg tabular-nums text-fg">{stats.solved_by_difficulty[d]}</dd>
+                    </div>
                   ))}
-                </select>
-                <select aria-label="Filter by topic" value={topic} onChange={(e) => setTopic(e.target.value)} className={SELECT}>
-                  <option value="">Any topic</option>
-                  {knownTopics.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
-                <select aria-label="Filter by result" value={result} onChange={(e) => setResult(e.target.value)} className={SELECT}>
-                  <option value="">Any result</option>
-                  <option value="solved">Solved</option>
-                  <option value="unsolved">Not solved</option>
-                </select>
-                {filtered && (
-                  <button
-                    onClick={() => {
-                      setDifficulty("");
-                      setTopic("");
-                      setResult("");
-                    }}
-                    className={`h-9 ${BUTTON_GHOST_SM}`}
-                  >
-                    <XIcon className="h-3.5 w-3.5" aria-hidden />
-                    Clear
-                  </button>
+                </dl>
+                <dl className="mt-3 grid grid-cols-3 gap-3 border-t border-line pt-3">
+                  <div>
+                    <dt className="text-[13px] text-fg-muted">Avg time</dt>
+                    <dd className="mt-0.5 font-mono text-lg tabular-nums text-fg">
+                      {stats.avg_solve_minutes === null ? "-" : `${Math.round(stats.avg_solve_minutes)}m`}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-[13px] text-fg-muted">Hints</dt>
+                    <dd className="mt-0.5 font-mono text-lg tabular-nums text-fg">{pct(stats.hint_usage_rate)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[13px] text-fg-muted">On your own</dt>
+                    <dd className="mt-0.5 font-mono text-lg tabular-nums text-fg">{pct(stats.independent_solve_rate)}</dd>
+                  </div>
+                </dl>
+              </section>
+
+              <Panel
+                title="Topics"
+                icon={LightbulbIcon}
+                labelledBy="lc-topics"
+                className="lg:flex-1"
+                actions={<span className="text-xs text-fg-faint">weakest first, last {topics.recent_window} attempts each</span>}
+              >
+                {stats.insights.length > 0 && (
+                  <ul aria-label="Insights" className="mb-1 space-y-1.5 border-b border-line px-3 pb-3 pt-2">
+                    {stats.insights.map((line) => (
+                      <li key={line} className="flex items-start gap-2.5 text-sm leading-relaxed text-fg">
+                        <LightbulbIcon weight="duotone" className="mt-0.5 h-4 w-4 shrink-0 text-accent" aria-hidden />
+                        {line}
+                      </li>
+                    ))}
+                  </ul>
                 )}
-              </div>
+                {topics.topics.length === 0 ? (
+                  <p className="px-3 py-6 text-center text-sm text-fg-faint">Topics show up once attempts have them.</p>
+                ) : (
+                  <ul>
+                    {topics.topics.map((t) => {
+                      const weak = topics.weakest.includes(t.topic);
+                      return (
+                        <li key={t.topic}>
+                          <button
+                            type="button"
+                            onClick={() => setTopic(topic === t.topic ? "" : t.topic)}
+                            aria-pressed={topic === t.topic}
+                            className={`flex w-full items-start gap-4 rounded-lg px-3 py-2.5 text-left transition-colors duration-150 hover:bg-surface-2/70 ${
+                              topic === t.topic ? "bg-accent-soft" : ""
+                            }`}
+                          >
+                            <span className="min-w-0 flex-1">
+                              <span className="flex flex-wrap items-center gap-2 text-sm text-fg">
+                                {t.topic}
+                                {weak && <span className="rounded-md bg-warn-soft px-1.5 py-px text-[11px] font-medium text-warn">Needs work</span>}
+                              </span>
+                              <span className="mt-0.5 block text-xs leading-relaxed text-fg-muted">{t.reasons.join(", ")}</span>
+                            </span>
+                            <span className="shrink-0 text-right">
+                              <span className="block font-mono text-sm tabular-nums text-fg">
+                                {t.solved_problems}/{t.problems}
+                              </span>
+                              <span className="block text-[11px] text-fg-faint">solved</span>
+                            </span>
+                            <span className="w-20 shrink-0 pt-1.5" aria-hidden={t.weakness === null}>
+                              {t.weakness === null ? (
+                                <span className="block text-right text-[11px] text-fg-faint">not rated</span>
+                              ) : (
+                                <>
+                                  <span className="block h-1.5 overflow-hidden rounded-full bg-surface-2">
+                                    <span
+                                      className={`block h-full rounded-full ${weak ? "bg-warn" : "bg-accent"}`}
+                                      style={{ width: `${Math.max(4, t.weakness * 100)}%` }}
+                                    />
+                                  </span>
+                                  <span className="mt-1 block text-right text-[11px] text-fg-faint">
+                                    weakness <span className="font-mono tabular-nums">{Math.round(t.weakness * 100)}</span>
+                                  </span>
+                                </>
+                              )}
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </Panel>
             </div>
-            {attempts === null ? (
-              <TaskListSkeleton rows={3} />
-            ) : attempts.length === 0 ? (
-              <p className="rounded-xl border border-dashed border-line-strong px-4 py-6 text-center text-sm text-fg-faint">
-                No attempts match these filters.
-              </p>
-            ) : (
-              <ul className={`anim-stagger ${CARD_LIST}`}>
-                {attempts.map((a, i) => (
-                  <AttemptRow key={a.id} attempt={a} index={i} onDeleted={refresh} />
-                ))}
-              </ul>
-            )}
-          </section>
-        </div>
+          </div>
+        </>
       )}
 
       {logging && <AttemptModal knownTopics={knownTopics} onClose={() => setLogging(false)} onLogged={refresh} />}
       {editingGoals && goals && <GoalsModal goals={goals} onClose={() => setEditingGoals(false)} onSaved={refresh} />}
-    </div>
+    </Page>
   );
 }
