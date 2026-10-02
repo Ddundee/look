@@ -35,32 +35,72 @@ isn't re-created by the next sync.
 
 ## Categories
 
-What kind of thing a task or event is: Personal, School, Research, SOU, …
-Tasks and events still store the category as a plain string. That string
-is the category's `key`, so renaming or restyling never touches them, and
-typing a new category name creates it with a default look.
+Life areas for tasks and events. Tasks and events store the category as a
+plain string, which is the category's `key`. Renaming or restyling a
+category never touches them, and typing a new category name creates it
+(Soft style, default color).
 
-Migration `0005` seeded the built-in categories (task: LeetCode, school,
-project, personal, errands; event: class, social, sports, work,
-appointment, other) with their previous colors, plus every other category
-string already in use.
+Built-in set (after migration `0007`):
+
+| Key | Shown as | Look |
+|---|---|---|
+| `personal` | Personal | blue, soft |
+| `school` | School | amber, striped (also every Canvas-course item without a course match) |
+| `work` | Career | violet, soft |
+| `project` | Projects | teal, outline |
+| `organizations` | Organizations | indigo, outline |
+| `health` | Health | green, soft |
+| `errands` | Errands | orange, outline |
+| `social` | Social | pink, glass |
+| `other` | Other | slate, soft |
+| `LeetCode` | LeetCode | violet, striped |
+
+Migration `0007` changed only built-in categories nobody had edited:
+- it renamed by display name (`work` and `project` keep their keys)
+- it moved `class` items to School and archived `class`
+- it archived `sports` and `appointment` only if unused
+
+Your own categories and anything you've edited are never changed.
 
 ## Looks
 
-A course or category has a **color** (14 keys: red … slate) and a **style**:
+Two families, told apart by shape as well as color, so they still read in
+grayscale:
 
-| Style | Look |
-|---|---|
-| `solid` | Full-color edge; tinted chips with a solid stripe |
-| `soft` | Lighter edge and tint |
-| `outline` | Colored outline, neutral inside |
-| `striped` | Dashed edge; diagonal-striped chips |
-| `glass` | Translucent, blurred tint with a light border |
+- **Courses** share one academic signature: a hatched rail beside list
+  rows, a cap-icon course badge, and a calm tint with a small hatched rail
+  on calendar chips. Only the color differs between classes (the course's
+  stored `style` is kept but not used for rendering). New courses get
+  colors spread around the wheel: blue, orange, violet, green, pink,
+  teal, …
+- **Categories** show a small mark whose shape follows the style, and a
+  restrained tint:
 
-Only these keys are stored. The CSS lives in `frontend/src/app/globals.css`
-(`.look-edge`, `.look-fill`, `.look-ink`), with light and dark palettes.
-`lib/palette.ts` decides an item's look: its course's if it has one,
-otherwise its category's.
+| Style | Mark | Tint |
+|---|---|---|
+| `soft` (default) | dot | light |
+| `solid` | filled square | a little stronger |
+| `outline` | ring | neutral, colored border |
+| `striped` | hatched square | faint diagonal lines |
+| `glass` | frosted square | soft gradient, border and highlight |
+
+For a course item, the course badge replaces the category and feed name;
+items never show a stack of identity badges.
+
+There's no `backdrop-filter`, since these repeat dozens of times on a
+screen; Glass is a gradient, a border and a highlight.
+
+Colors come from 14 keys. Pickers show ten first (red, orange, amber,
+green, teal, blue, indigo, violet, pink, slate); yellow, lime, cyan and sky
+are under "More colors" and stay valid. Only these keys are stored. The CSS
+is in `frontend/src/app/globals.css` (`.look-edge`, `.look-mark`,
+`.look-fill`, `.look-ink`), and `lib/palette.ts` picks an item's look:
+course first, then category.
+
+Settings → **Planning & appearance** shows Courses and Categories as
+compact summaries; **Manage** opens their lists, and a row opens its
+editor. A course's aliases and Canvas links are under "Advanced" in its
+editor.
 
 ## Things to do
 

@@ -6,8 +6,7 @@ import { PlugsConnectedIcon, OpenAiLogoIcon } from "@phosphor-icons/react";
 import { PageHeader } from "@/components/PageParts";
 import VersionSection from "@/components/VersionSection";
 import CalendarsSection from "@/components/calendars/CalendarsSection";
-import CategoriesSection from "@/components/planning/CategoriesSection";
-import CoursesSection from "@/components/planning/CoursesSection";
+import PlanningSection from "@/components/planning/PlanningSection";
 import { CARD, FAINT, INLINE_CODE, LINK, MUTED, SECTION_HEADING } from "@/lib/ui";
 
 // Never notifies — the hostname doesn't change during a session, so this
@@ -48,9 +47,7 @@ export default function SettingsPage() {
 
       <CalendarsSection />
 
-      <CoursesSection />
-
-      <CategoriesSection />
+      <PlanningSection />
 
       {/* ---- Connect an MCP client -------------------------------------- */}
       <section className="space-y-3">

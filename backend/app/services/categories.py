@@ -4,7 +4,7 @@ as they always have), so renaming or restyling never touches them."""
 
 import re
 import zlib
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from sqlalchemy import func
 from sqlmodel import Session, select
@@ -12,7 +12,7 @@ from sqlmodel import Session, select
 from app.models.events import Event
 from app.models.planning import COLORS, STYLES, Category
 from app.models.task import RecurrenceRule, Task
-from app.schemas import CategoryCreate, CategoryUpdate
+from app.schemas import CategoryCreate, CategoryRead, CategoryUpdate
 from app.utils import utcnow
 
 
@@ -56,7 +56,7 @@ def create_category(session: Session, payload: CategoryCreate) -> Category:
     if clash is not None:
         raise ValueError(f"A category called '{clash.name}' already exists.")
     category = Category(key=key, name=payload.name.strip(), color=payload.color or default_color(key),
-                        style=payload.style or "solid")
+                        style=payload.style or "soft")
     session.add(category)
     session.commit()
     session.refresh(category)
@@ -72,6 +72,25 @@ def update_category(session: Session, category: Category, changes: CategoryUpdat
     session.commit()
     session.refresh(category)
     return category
+
+
+def usage_counts(session: Session) -> Dict[str, int]:
+    """Tasks + events per category key (recurring templates not counted)."""
+    counts: Dict[str, int] = {}
+    for model in (Task, Event):
+        for key, n in session.exec(select(model.category, func.count()).group_by(model.category)).all():
+            counts[key] = counts.get(key, 0) + n
+    return counts
+
+
+def read_all(session: Session, include_archived: bool = False) -> List[CategoryRead]:
+    counts = usage_counts(session)
+    out = []
+    for category in list_categories(session, include_archived):
+        item = CategoryRead.model_validate(category)
+        item.item_count = counts.get(category.key, 0)
+        out.append(item)
+    return out
 
 
 def usage(session: Session, key: str) -> int:

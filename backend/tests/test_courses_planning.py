@@ -85,7 +85,8 @@ def test_category_values_are_validated_over_rest(client, auth_headers):
     ok = client.post("/api/categories", headers=auth_headers, json={"name": "Research", "color": "teal", "style": "outline"})
     assert ok.status_code == 201 and ok.json()["key"] == "Research"
     listed = client.get("/api/categories", headers=auth_headers).json()
-    assert {"school", "class", "Research"} <= {c["key"] for c in listed}
+    assert {"school", "work", "Research"} <= {c["key"] for c in listed}
+    assert next(c for c in listed if c["key"] == "work")["name"] == "Career"
 
 
 # ---- courses ---------------------------------------------------------------
@@ -278,3 +279,14 @@ def test_rest_course_endpoints(client, auth_headers):
     assert client.patch(f"/api/courses/{cid}", headers=auth_headers, json={"style": "neon"}).status_code == 422
     work = client.get("/api/today/work?date=2026-10-07", headers=auth_headers)
     assert work.status_code == 200
+
+
+def test_canvas_course_items_are_filed_under_school(session):
+    body = {"v": calendar(canvas_item(1201, "Reflection", "20261009", course_ctx="course_90", code="2026FA-1"),
+                          "BEGIN:VEVENT\r\nUID:x9@other\r\nDTSTART:20261009T150000Z\r\nDTEND:20261009T160000Z\r\nSUMMARY:Club fair\r\nEND:VEVENT")}
+    sub, fetch = subscribe_static(session, body)
+    sync.sync_subscription(session, sub, fetch=fetch)
+    items = live(session, sub)
+    assert items["event-assignment-1201"].course_id is None  # unmapped, but still school
+    assert items["event-assignment-1201"].category == "school"
+    assert items["x9@other"].category == "other"

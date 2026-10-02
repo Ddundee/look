@@ -9,12 +9,17 @@ export const COLORS = [
 ] as const;
 export type ColorKey = (typeof COLORS)[number];
 
-export const STYLES = ["solid", "soft", "outline", "striped", "glass"] as const;
+/** Shown first in pickers: well separated and readable in both themes.
+ * The rest stay valid (existing choices keep working) behind "More". */
+export const PRIMARY_COLORS: readonly ColorKey[] = ["red", "orange", "amber", "green", "teal", "blue", "indigo", "violet", "pink", "slate"];
+export const SECONDARY_COLORS: readonly ColorKey[] = COLORS.filter((c) => !PRIMARY_COLORS.includes(c));
+
+export const STYLES = ["soft", "solid", "outline", "striped", "glass"] as const;
 export type StyleKey = (typeof STYLES)[number];
 
 export const STYLE_LABEL: Record<StyleKey, string> = {
-  solid: "Solid",
   soft: "Soft",
+  solid: "Solid",
   outline: "Outline",
   striped: "Striped",
   glass: "Glass",
@@ -46,7 +51,7 @@ export function toColor(value: string | null | undefined): ColorKey {
 }
 
 export function toStyle(value: string | null | undefined): StyleKey {
-  return (STYLES as readonly string[]).includes(value ?? "") ? (value as StyleKey) : "solid";
+  return (STYLES as readonly string[]).includes(value ?? "") ? (value as StyleKey) : "soft";
 }
 
 /** A stable color for a category no one has styled (same idea as the
@@ -66,7 +71,7 @@ export function lookFor(item: { course?: CourseLook | null; category?: string | 
   if (category) {
     return { color: toColor(category.color), style: toStyle(category.style), kind: "category", label: category.name };
   }
-  return { color: fallbackColor(key), style: "solid", kind: "category", label: key };
+  return { color: fallbackColor(key), style: "soft", kind: "category", label: key };
 }
 
 /** The CSS custom property the .look-* classes read. Only palette keys

@@ -763,6 +763,7 @@ class CategoryRead(BaseModel):
     style: str
     is_system: bool
     archived: bool
+    item_count: int = 0  # tasks + events using it (lists only)
 
 
 class CourseCreate(BaseModel):

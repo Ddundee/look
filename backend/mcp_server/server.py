@@ -1324,8 +1324,7 @@ def list_categories(include_archived: bool = False) -> dict:
     with key (what a task/event's category field holds), name, color and
     style."""
     with _session() as session:
-        items = [CategoryRead.model_validate(c).model_dump(mode="json")
-                 for c in categories_service.list_categories(session, include_archived)]
+        items = [c.model_dump(mode="json") for c in categories_service.read_all(session, include_archived)]
         return {"categories": items, "count": len(items)}
 
 

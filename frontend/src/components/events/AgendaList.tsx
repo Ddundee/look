@@ -7,7 +7,7 @@ import { nowPlacement } from "@/lib/now";
 import { titleWithoutCourse } from "@/lib/palette";
 import type { Occurrence } from "@/lib/types";
 import { CARD_LIST } from "@/lib/ui";
-import { CourseBadge, ItemEdge, useLook } from "../look/Look";
+import { CategoryTag, CourseBadge, ItemEdge, useLook } from "../look/Look";
 import DeadlineCheckbox from "./DeadlineCheckbox";
 
 /** "Now · 12:47 PM": where the current time falls in today's list. */
@@ -158,8 +158,11 @@ function AgendaRow({ occ: o, index, onOpen, active }: { occ: Occurrence; index: 
           </span>
           <span className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-fg-muted">
             {active && <span className="rounded-md bg-accent px-1.5 py-px text-[11px] font-medium text-accent-fg">Now</span>}
-            {o.course ? <CourseBadge course={o.course} /> : !o.subscription_name && <span>{look.label}</span>}
-            {o.subscription_name && (
+            {/* One identity, not a stack of badges: the course if there is
+                one (that already says school), else the category; the feed
+                name only for imports without a course. */}
+            {o.course ? <CourseBadge course={o.course} /> : !o.subscription_name && <CategoryTag category={o.category} />}
+            {o.subscription_name && !o.course && (
               <span className="inline-flex items-center gap-1" title={`From ${o.subscription_name} (read-only)`}>
                 <CalendarDotsIcon className="h-3.5 w-3.5" aria-hidden />
                 {o.subscription_name}

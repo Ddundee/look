@@ -32,7 +32,7 @@ class Category(SQLModel, table=True):
     key: str = Field(unique=True)
     name: str
     color: str = "slate"
-    style: str = "solid"
+    style: str = "soft"  # the quiet, safe default
     is_system: bool = False
     archived: bool = False
     created_at: datetime = Field(default_factory=utcnow)

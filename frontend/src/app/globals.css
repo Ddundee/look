@@ -144,68 +144,110 @@
   }
 }
 
-/* Item looks: a course's or category's color (--look, set inline from a
-   palette key by lib/palette.ts) in one of five styles (data-style).
-   Subtle by design: text keeps the normal foreground color; the color sits
-   in an edge, a tint or a pattern next to a text label, never alone.
-   .look-edge: the thin marker beside an item in lists.
-   .look-fill: a tinted background (month-grid chips, badges, previews). */
+/* Item looks (lib/palette.ts sets --look from a palette key; never CSS).
+   Two families, told apart by shape, not only color:
+   - Courses (data-kind="course"): one academic signature for every class,
+     a hatched rail and a faintly hatched tint. Each course differs by
+     color only; its stored style isn't used for rendering.
+   - Categories: a small mark whose shape follows the style (dot, square,
+     ring, hatched square, frosted square), plus a restrained tint.
+   No backdrop-filter anywhere: these repeat dozens of times per screen.
+   Text keeps the normal foreground color throughout.
+
+   .look-edge: the marker beside a list row (rail for courses, mark otherwise)
+   .look-mark: the category shape on its own (tags, chips, previews)
+   .look-fill: a tinted surface (calendar chips, course badges, previews)
+   .look-ink:  an icon or glyph in the look's color */
+
 .look-edge {
-  width: 3px;
   flex-shrink: 0;
+}
+.look-edge[data-kind="course"] {
+  width: 4px;
   align-self: stretch;
   border-radius: 9999px;
-  background: var(--look);
-}
-.look-edge[data-style="soft"] {
-  background: color-mix(in oklch, var(--look) 55%, transparent);
-}
-.look-edge[data-style="outline"] {
-  width: 5px;
-  background: transparent;
-  box-shadow: inset 0 0 0 1.5px var(--look);
-}
-.look-edge[data-style="striped"] {
-  width: 4px;
-  background: repeating-linear-gradient(180deg, var(--look) 0 3px, transparent 3px 5px);
-}
-.look-edge[data-style="glass"] {
-  width: 4px;
-  background: linear-gradient(180deg, color-mix(in oklch, var(--look) 75%, white), color-mix(in oklch, var(--look) 40%, transparent));
-  box-shadow: 0 0 0 1px color-mix(in oklch, var(--look) 30%, transparent);
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--look) 0 3px,
+    color-mix(in oklch, var(--look) 62%, var(--surface)) 3px 5px
+  );
 }
 
+.look-mark,
+.look-edge[data-kind="category"] {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  flex-shrink: 0;
+  border-radius: 2px;
+  background: var(--look);
+}
+/* In a list row the mark lines up with the first line of text. */
+.look-edge[data-kind="category"] {
+  margin-top: 5.5px;
+}
+.look-mark[data-style="soft"],
+.look-edge[data-kind="category"][data-style="soft"] {
+  border-radius: 9999px;
+  background: color-mix(in oklch, var(--look) 75%, var(--surface));
+}
+.look-mark[data-style="outline"],
+.look-edge[data-kind="category"][data-style="outline"] {
+  border-radius: 9999px;
+  background: transparent;
+  box-shadow: inset 0 0 0 2px var(--look);
+}
+.look-mark[data-style="striped"],
+.look-edge[data-kind="category"][data-style="striped"] {
+  background: repeating-linear-gradient(-45deg, var(--look) 0 1.5px, color-mix(in oklch, var(--look) 25%, transparent) 1.5px 3px);
+  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--look) 60%, transparent);
+}
+.look-mark[data-style="glass"],
+.look-edge[data-kind="category"][data-style="glass"] {
+  border-radius: 3px;
+  background: linear-gradient(160deg, color-mix(in oklch, var(--look) 30%, var(--surface)), color-mix(in oklch, var(--look) 60%, var(--surface)));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklch, var(--look) 70%, transparent),
+    inset 0 1px 0 color-mix(in oklch, white 55%, transparent);
+}
+
+/* Tinted surfaces. Categories stay restrained; the mark carries identity. */
 .look-fill {
-  background: color-mix(in oklch, var(--look) 16%, var(--surface));
+  background: color-mix(in oklch, var(--look) 10%, var(--surface));
 }
 .look-fill[data-style="solid"] {
-  background: color-mix(in oklch, var(--look) 20%, var(--surface));
-  box-shadow: inset 2px 0 0 var(--look);
-}
-.look-fill[data-style="soft"] {
-  background: color-mix(in oklch, var(--look) 12%, var(--surface));
+  background: color-mix(in oklch, var(--look) 16%, var(--surface));
 }
 .look-fill[data-style="outline"] {
   background: var(--surface);
-  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--look) 70%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--look) 55%, transparent);
 }
 .look-fill[data-style="striped"] {
   background: repeating-linear-gradient(
-    135deg,
-    color-mix(in oklch, var(--look) 20%, var(--surface)) 0 5px,
-    color-mix(in oklch, var(--look) 7%, var(--surface)) 5px 10px
+    -45deg,
+    color-mix(in oklch, var(--look) 13%, var(--surface)) 0 4px,
+    color-mix(in oklch, var(--look) 5%, var(--surface)) 4px 8px
   );
 }
 .look-fill[data-style="glass"] {
-  background: linear-gradient(
-    180deg,
-    color-mix(in oklch, var(--look) 18%, transparent),
-    color-mix(in oklch, var(--look) 8%, transparent)
-  );
-  backdrop-filter: blur(6px);
+  background: linear-gradient(180deg, color-mix(in oklch, var(--look) 14%, var(--surface)), color-mix(in oklch, var(--look) 6%, var(--surface)));
   box-shadow:
-    inset 0 0 0 1px color-mix(in oklch, var(--look) 32%, transparent),
-    inset 0 1px 0 color-mix(in oklch, white 30%, transparent);
+    inset 0 0 0 1px color-mix(in oklch, var(--look) 28%, transparent),
+    inset 0 1px 0 color-mix(in oklch, white 40%, transparent);
+}
+/* Every course, whatever its stored style: a plain tint with a small
+   hatched rail on the left, the same academic signature as list rows.
+   The hatch stays a secondary cue; the tint keeps dense grids calm. */
+.look-fill[data-kind="course"] {
+  background:
+    repeating-linear-gradient(
+        -45deg,
+        var(--look) 0 2px,
+        color-mix(in oklch, var(--look) 55%, var(--surface)) 2px 4px
+      )
+      left / 3px 100% no-repeat,
+    color-mix(in oklch, var(--look) 12%, var(--surface));
+  box-shadow: none;
 }
 /* An icon or short label in the look's color, readable on surfaces. */
 .look-ink {
