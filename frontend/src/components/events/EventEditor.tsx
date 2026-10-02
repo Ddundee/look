@@ -10,6 +10,7 @@ import type { CalendarEvent, Occurrence } from "@/lib/types";
 import { BUTTON_SECONDARY } from "@/lib/ui";
 import Dialog from "../Dialog";
 import EventModal from "./EventModal";
+import ImportedEventModal from "./ImportedEventModal";
 import OccurrenceModal from "./OccurrenceModal";
 
 export type EditorTarget = { kind: "new"; date: string } | { kind: "occurrence"; occ: Occurrence };
@@ -21,7 +22,7 @@ const CHOICE =
  * (after asking "just this date or all dates"), or a whole event. */
 export default function EventEditor({ target, onClose }: { target: EditorTarget; onClose: () => void }) {
   const [step, setStep] = useState<"scope" | "this" | "load" | "series">(
-    target.kind === "new" ? "series" : target.occ.recurring ? "scope" : "load"
+    target.kind === "new" ? "series" : target.occ.read_only ? "this" : target.occ.recurring ? "scope" : "load"
   );
   const [event, setEvent] = useState<CalendarEvent | null>(null);
 
@@ -48,6 +49,11 @@ export default function EventEditor({ target, onClose }: { target: EditorTarget;
   function done() {
     notifyEventsChanged();
     onClose();
+  }
+
+  // Imported events are read-only: show their details instead of a form.
+  if (target.kind === "occurrence" && target.occ.read_only) {
+    return <ImportedEventModal occ={target.occ} onClose={onClose} />;
   }
 
   if (step === "scope" && target.kind === "occurrence") {

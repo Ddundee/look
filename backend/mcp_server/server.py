@@ -34,6 +34,8 @@ from app.config import get_settings
 from app.logging_config import configure_logging
 from app.models.enums import RecurrencePattern, TaskPriority, TaskStatus
 from app.schemas import (
+    CalendarSubscriptionCreate,
+    CalendarSubscriptionUpdate,
     LeetCodeAttemptCreate,
     LeetCodeGoalsSet,
     EventCreate,
@@ -49,6 +51,7 @@ from app.schemas import (
     TaskUpdate,
 )
 from app.security import constant_time_equals
+from app.services import calendar_sync
 from app.services import events as events_service
 from app.services import leetcode as leetcode_service
 from app.services import nutrition as nutrition_service
@@ -74,7 +77,12 @@ mcp = MCPServer(
         "get_schedule, edit_occurrence for single dates. And a LeetCode "
         "tracker for what the user actually solved (separate from tasks, "
         "which are plans): log_leetcode_attempt, then report progress from "
-        "the returned stats. Dates are ISO "
+        "the returned stats. Calendar subscriptions: when the user gives an "
+        "ICS/webcal calendar URL (Canvas, school, sports, exported Google "
+        "calendars) and asks to add it, call add_calendar_subscription: that "
+        "creates a LIVE subscription Look re-fetches automatically, so new "
+        "and changed events keep arriving. Never import a URL once. "
+        "Imported events are read-only. Dates are ISO "
         "'YYYY-MM-DD', times are "
         "'HH:MM' 24-hour."
     ),
@@ -881,7 +889,10 @@ def delete_event(event_id: str) -> dict:
         event = events_service.get_event(session, event_id)
         if event is None:
             return _event_not_found(event_id)
-        events_service.delete_event(session, event)
+        try:
+            events_service.delete_event(session, event)
+        except ValueError as exc:
+            return _error(exc)
         return {"deleted_id": event_id}
 
 
@@ -1026,6 +1037,119 @@ def set_leetcode_goals(daily_target: int, weekly_target: int) -> dict:
 # ---------------------------------------------------------------------------
 # Resources (read-only)
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Calendar subscriptions (ICS)
+# ---------------------------------------------------------------------------
+
+
+def _subscription_not_found(subscription_id: str) -> dict:
+    return {"error": f"No calendar subscription with id '{subscription_id}'. Use list_calendar_subscriptions."}
+
+
+@mcp.tool()
+def add_calendar_subscription(name: str, url: str, sync_interval_minutes: int = 30) -> dict:
+    """Subscribe Look to an ICS calendar URL (https://, http:// or
+    webcal://), e.g. a Canvas calendar feed ('.../feeds/calendars/user_...ics'),
+    a school or team calendar, or a Google Calendar 'secret address in iCal
+    format'. Use this whenever the user gives a calendar URL and wants it in
+    Look: it creates a PERSISTENT subscription that Look re-fetches every
+    sync_interval_minutes (default 30, 5-1440), so assignments published
+    later, moved deadlines and cancellations show up on their own. It also
+    syncs once immediately; report the counts (and error, if any; the
+    subscription is kept and retried even if the first sync failed).
+    name is how events are labeled, e.g. 'Canvas'."""
+    try:
+        payload = CalendarSubscriptionCreate(name=name, url=url, sync_interval_minutes=sync_interval_minutes)
+    except ValidationError as exc:
+        return _error(exc)
+    with _session() as session:
+        try:
+            sub = calendar_sync.create_subscription(session, payload)
+        except calendar_sync.DuplicateSubscription as exc:
+            return {**_error(exc), "subscription": calendar_sync.read(session, exc.existing).model_dump(mode="json")}
+        except ValueError as exc:
+            return _error(exc)
+        return calendar_sync.sync_subscription(session, sub).model_dump(mode="json")
+
+
+@mcp.tool()
+def list_calendar_subscriptions() -> dict:
+    """Every calendar source: URL subscriptions (with their interval, last
+    sync, last error and how many events they currently provide) and
+    one-time .ics file imports (source_type 'file', never re-fetched)."""
+    with _session() as session:
+        subs = [s.model_dump(mode="json") for s in calendar_sync.list_subscriptions(session)]
+        return {"subscriptions": subs, "count": len(subs)}
+
+
+@mcp.tool()
+def sync_calendar_subscription(subscription_id: str) -> dict:
+    """Re-fetch a URL subscription now instead of waiting for its interval.
+    Returns created/updated/unchanged/removed counts. On a network or feed
+    error nothing is changed and status is 'error'."""
+    with _session() as session:
+        sub = calendar_sync.get_subscription(session, subscription_id)
+        if sub is None:
+            return _subscription_not_found(subscription_id)
+        try:
+            return calendar_sync.sync_subscription(session, sub).model_dump(mode="json")
+        except ValueError as exc:
+            return _error(exc)
+
+
+@mcp.tool()
+def update_calendar_subscription(
+    subscription_id: str,
+    name: Optional[str] = None,
+    enabled: Optional[bool] = None,
+    sync_interval_minutes: Optional[int] = None,
+) -> dict:
+    """Rename a calendar source, pause/resume a URL subscription
+    (enabled=false stops syncing; its events stay), or change its interval."""
+    try:
+        payload = CalendarSubscriptionUpdate.model_validate(
+            {k: v for k, v in {"name": name, "enabled": enabled, "sync_interval_minutes": sync_interval_minutes}.items() if v is not None}
+        )
+    except ValidationError as exc:
+        return _error(exc)
+    with _session() as session:
+        sub = calendar_sync.get_subscription(session, subscription_id)
+        if sub is None:
+            return _subscription_not_found(subscription_id)
+        try:
+            sub = calendar_sync.update_subscription(session, sub, payload)
+        except ValueError as exc:
+            return _error(exc)
+        return calendar_sync.read(session, sub).model_dump(mode="json")
+
+
+@mcp.tool()
+def remove_calendar_subscription(subscription_id: str, keep_events: bool = False) -> dict:
+    """Remove a calendar source. Only when the user asks, and ask them
+    first whether to keep its events: keep_events=true turns them into
+    normal, editable Look events; false deletes them with the subscription."""
+    with _session() as session:
+        sub = calendar_sync.get_subscription(session, subscription_id)
+        if sub is None:
+            return _subscription_not_found(subscription_id)
+        name = sub.name
+        result = calendar_sync.delete_subscription(session, sub, keep_events=keep_events)
+        return {"removed": name, **result}
+
+
+@mcp.tool()
+def import_ics(content: str, name: str) -> dict:
+    """Import raw iCalendar text (BEGIN:VCALENDAR ... END:VCALENDAR) ONCE,
+    e.g. pasted or attached .ics content. This is a snapshot that never
+    updates by itself; importing again with the same name updates it. If
+    the user has a URL instead, use add_calendar_subscription."""
+    with _session() as session:
+        try:
+            return calendar_sync.import_file(session, content.encode(), name).model_dump(mode="json")
+        except ValueError as exc:
+            return _error(exc)
 
 
 @mcp.resource("tasks://today")

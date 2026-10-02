@@ -1,9 +1,9 @@
-from datetime import date, datetime, time
-from typing import List, Optional
+from datetime import date, datetime, time, timezone
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.models.enums import LeetCodeDifficulty, MealType, RecurrencePattern, TaskPriority, TaskStatus
+from app.models.enums import CalendarSourceType, LeetCodeDifficulty, MealType, RecurrencePattern, TaskPriority, TaskStatus
 
 
 # ---------------------------------------------------------------------------
@@ -373,6 +373,11 @@ class EventRead(BaseModel):
     source: str
     created_at: datetime
     updated_at: datetime
+    # Set for events mirrored from a calendar subscription (read-only).
+    subscription_id: Optional[str] = None
+    external_url: Optional[str] = None
+    external_status: Optional[str] = None  # "cancelled" | "removed" | None
+    last_synced_at: Optional[datetime] = None
 
 
 class Occurrence(BaseModel):
@@ -389,6 +394,15 @@ class Occurrence(BaseModel):
     rrule: Optional[str]
     overridden: bool = False
     cancelled: bool = False
+    # Imported from a calendar subscription: the feed owns it, so Look
+    # won't edit it (read_only). external_status is "cancelled" (cancelled
+    # in the feed) or "removed" (gone from the feed); both also set
+    # cancelled, so they're hidden unless include_cancelled.
+    read_only: bool = False
+    subscription_id: Optional[str] = None
+    subscription_name: Optional[str] = None
+    external_url: Optional[str] = None
+    external_status: Optional[str] = None
 
 
 class EventWithContext(BaseModel):
@@ -600,3 +614,86 @@ class LeetCodeProblemList(BaseModel):
 class LeetCodeProblemDetail(BaseModel):
     problem: LeetCodeProblemSummary
     attempts: List[LeetCodeAttemptRead]
+
+
+# ---------------------------------------------------------------------------
+# Calendar subscriptions (ICS feeds and file imports)
+# ---------------------------------------------------------------------------
+
+
+def _as_utc(value: Optional[datetime]) -> Optional[datetime]:
+    # Stored as naive UTC; say so on the way out so clients show local time.
+    return value.replace(tzinfo=timezone.utc) if value is not None and value.tzinfo is None else value
+
+
+class CalendarSubscriptionCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    url: str = Field(min_length=1, max_length=2000)
+    sync_interval_minutes: int = Field(default=30, ge=5, le=1440)
+
+    @field_validator("name")
+    @classmethod
+    def _name(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("name can't be blank")
+        return v
+
+
+class CalendarSubscriptionUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    enabled: Optional[bool] = None
+    sync_interval_minutes: Optional[int] = Field(default=None, ge=5, le=1440)
+
+    @field_validator("name")
+    @classmethod
+    def _name(cls, v: Optional[str]) -> Optional[str]:
+        return _clean_title(v)
+
+
+class CalendarSubscriptionRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    name: str
+    source_type: CalendarSourceType
+    source_url: Optional[str]
+    enabled: bool
+    sync_interval_minutes: int
+    last_sync_at: Optional[datetime]
+    last_success_at: Optional[datetime]
+    last_error: Optional[str]
+    last_result: Optional[Dict[str, int]]
+    created_at: datetime
+    updated_at: datetime
+    event_count: int = 0  # imported events still in the feed
+    next_sync_at: Optional[datetime] = None  # URL sources only, when enabled
+
+    @field_validator("last_sync_at", "last_success_at", "created_at", "updated_at", "next_sync_at")
+    @classmethod
+    def _utc(cls, v: Optional[datetime]) -> Optional[datetime]:
+        return _as_utc(v)
+
+
+class CalendarSyncResult(BaseModel):
+    # ok: fetched and reconciled; not_modified: the server said nothing
+    # changed (HTTP 304); error: nothing was changed (see error);
+    # skipped: disabled, or a sync of it was already running.
+    status: str
+    created: int = 0
+    updated: int = 0
+    unchanged: int = 0
+    removed: int = 0
+    error: Optional[str] = None
+    warnings: List[str] = Field(default_factory=list)
+    subscription: Optional[CalendarSubscriptionRead] = None
+
+
+class CalendarSubscriptionList(BaseModel):
+    subscriptions: List[CalendarSubscriptionRead]
+    count: int
+
+
+class CalendarSubscriptionDeleted(BaseModel):
+    events_kept: int
+    events_deleted: int

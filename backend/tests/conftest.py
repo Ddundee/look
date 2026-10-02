@@ -11,6 +11,7 @@ os.environ.setdefault("ADMIN_PASSWORD", "admin-password")
 # using `local_today()` are deterministic regardless of the machine's
 # system timezone.
 os.environ.setdefault("APP_TIMEZONE", "UTC")
+os.environ.setdefault("CALENDAR_SYNC_ENABLED", "false")  # tests drive syncs explicitly
 
 import pytest
 from fastapi.testclient import TestClient

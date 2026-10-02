@@ -1,4 +1,6 @@
 import type {
+  CalendarSubscription,
+  CalendarSyncResult,
   LeetCodeAttempt,
   LeetCodeAttemptPayload,
   LeetCodeGoals,
@@ -38,7 +40,11 @@ export class ApiError extends Error {
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(path, {
     ...options,
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+    // FormData (file uploads) sets its own multipart Content-Type.
+    headers: {
+      ...(options.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
+      ...(options.headers || {}),
+    },
     credentials: "include",
   });
 
@@ -193,6 +199,28 @@ export const api = {
     }),
   restoreOccurrence: (id: string, day: string) =>
     request<Occurrence>(`/api/events/${id}/occurrences/${day}`, { method: "DELETE" }),
+
+  listCalendarSubscriptions: () =>
+    request<{ subscriptions: CalendarSubscription[]; count: number }>("/api/calendar-subscriptions"),
+  addCalendarSubscription: (payload: { name: string; url: string; sync_interval_minutes: number }) =>
+    request<CalendarSyncResult>("/api/calendar-subscriptions", { method: "POST", body: JSON.stringify(payload) }),
+  updateCalendarSubscription: (
+    id: string,
+    payload: { name?: string; enabled?: boolean; sync_interval_minutes?: number }
+  ) =>
+    request<CalendarSubscription>(`/api/calendar-subscriptions/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  syncCalendarSubscription: (id: string) =>
+    request<CalendarSyncResult>(`/api/calendar-subscriptions/${id}/sync`, { method: "POST" }),
+  deleteCalendarSubscription: (id: string, keepEvents: boolean) =>
+    request<{ events_kept: number; events_deleted: number }>(
+      `/api/calendar-subscriptions/${id}${qs({ keep_events: keepEvents })}`,
+      { method: "DELETE" }
+    ),
+  importIcsFile: (file: File) => {
+    const body = new FormData();
+    body.append("file", file);
+    return request<CalendarSyncResult>("/api/calendar-import", { method: "POST", body });
+  },
 
   getVersion: () => request<{ revision: string | null }>("/api/system/version"),
   getUpdateStatus: (refresh = false) =>

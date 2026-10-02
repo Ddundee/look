@@ -127,3 +127,10 @@ export function parseRrule(rule: string | null, dateIso: string): Repeat {
     count: COUNT ? Number(COUNT) : r.count,
   };
 }
+
+/** A deadline rather than a span: imported feeds (Canvas assignments) give
+ * due times with no length, which Look stores as one minute. Show these
+ * with just their time. */
+export function isInstant(o: { all_day: boolean; start_at: string; end_at: string }): boolean {
+  return !o.all_day && new Date(o.end_at).getTime() - new Date(o.start_at).getTime() <= 60_000;
+}
