@@ -41,7 +41,7 @@ export default function SettingsPage() {
   const mcpUrl = `http://${host}:8001/mcp`;
 
   return (
-    <div className="space-y-10 [&_code:not(pre_code)]:rounded [&_code:not(pre_code)]:bg-surface-2 [&_code:not(pre_code)]:px-1 [&_code:not(pre_code)]:py-0.5 [&_code:not(pre_code)]:font-mono [&_code:not(pre_code)]:text-[0.85em] [&_code:not(pre_code)]:text-fg">
+    <div className="space-y-8 [&_code:not(pre_code)]:rounded [&_code:not(pre_code)]:bg-surface-2 [&_code:not(pre_code)]:px-1 [&_code:not(pre_code)]:py-0.5 [&_code:not(pre_code)]:font-mono [&_code:not(pre_code)]:text-[0.85em] [&_code:not(pre_code)]:text-fg">
       <PageHeader title="Settings" subtitle="Calendars, AI assistants and updates." />
 
       <CalendarsSection />

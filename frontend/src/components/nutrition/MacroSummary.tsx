@@ -31,7 +31,7 @@ export default function MacroSummary({
   const calLeft = remaining?.calories ?? null;
 
   return (
-    <div className={`p-5 sm:p-6 ${CARD}`}>
+    <div className={`p-5 ${CARD}`}>
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
         <div className="flex items-baseline gap-1.5">
           <span className="font-mono text-4xl font-medium tabular-nums tracking-tight text-fg">
@@ -61,7 +61,7 @@ export default function MacroSummary({
         </div>
       )}
 
-      <dl className="mt-6 grid grid-cols-3 gap-4 sm:gap-6">
+      <dl className="mt-4 grid grid-cols-3 gap-4 sm:gap-6">
         {MACROS.map((m) => {
           const goal = targets?.[m] ?? null;
           return (

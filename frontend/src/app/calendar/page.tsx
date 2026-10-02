@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CalendarBlankIcon, CaretLeftIcon, CaretRightIcon, CheckIcon, PlusIcon } from "@phosphor-icons/react";
 import { api } from "@/lib/api";
 import { compactTime, eventHue } from "@/lib/calendarEvents";
@@ -8,7 +8,12 @@ import { onEventsChanged, onTasksChanged } from "@/lib/events";
 import { addDaysIso, categoryHue, formatDateLong, todayIso } from "@/lib/format";
 import { isTaskDone, type Occurrence, type Task } from "@/lib/types";
 import { BUTTON_PRIMARY, BUTTON_SECONDARY, CARD, ICON_BUTTON } from "@/lib/ui";
-import { PageHeader, TaskList } from "@/components/PageParts";
+
+// Month-cell geometry (px), used to fit as many items as a cell can show:
+// padding + day number + gap, and one item row.
+const CELL_CHROME = 40;
+const CELL_ITEM = 20;
+import { EmptyState, Page, PageHeader, Panel, TaskList } from "@/components/PageParts";
 import AgendaList from "@/components/events/AgendaList";
 import EventEditor, { type EditorTarget } from "@/components/events/EventEditor";
 
@@ -102,6 +107,31 @@ export default function CalendarPage() {
   ];
   while (cells.length % 7 !== 0) cells.push(null);
 
+  // On desktop the grid fills the page, so cells are as tall as the window
+  // allows: show as many items as fit (more on a big screen) instead of a
+  // fixed three. Smaller screens keep three and let cells grow.
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [cellCap, setCellCap] = useState(3);
+  const rowCount = cells.length / 7;
+  useEffect(() => {
+    const el = gridRef.current;
+    if (!el) return;
+    const desktop = window.matchMedia("(min-width: 1024px)");
+    const update = () => {
+      if (!desktop.matches) return setCellCap(3);
+      const cellHeight = el.clientHeight / rowCount;
+      setCellCap(Math.max(1, Math.floor((cellHeight - CELL_CHROME) / CELL_ITEM)));
+    };
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    desktop.addEventListener("change", update);
+    update();
+    return () => {
+      ro.disconnect();
+      desktop.removeEventListener("change", update);
+    };
+  }, [rowCount]);
+
   const monthLabel = new Date(cursor.year, cursor.month, 1).toLocaleDateString(undefined, {
     month: "long",
     year: "numeric",
@@ -128,7 +158,7 @@ export default function CalendarPage() {
   }
 
   return (
-    <div>
+    <Page>
       <PageHeader
         title={monthLabel}
         actions={
@@ -160,116 +190,119 @@ export default function CalendarPage() {
         }
       />
 
-      <div className={`overflow-hidden ${CARD} ${loading ? "opacity-60" : ""} transition-opacity`}>
-        <div className="grid grid-cols-7 border-b border-line">
-          {WEEKDAY_LABELS.map((d) => (
-            <div key={d} className="py-2 text-center text-xs font-medium text-fg-faint">
-              <span className="sm:hidden">{d[0]}</span>
-              <span className="hidden sm:inline">{d}</span>
-            </div>
-          ))}
-        </div>
-        <div className="grid grid-cols-7 [&>*:nth-child(7n)]:border-r-0">
-          {cells.map((day, idx) => {
-            const iso = day ? `${cursor.year}-${pad(cursor.month + 1)}-${pad(day)}` : null;
-            const lastRow = idx >= cells.length - 7;
+      <div className="grid gap-4 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,1fr)_19rem]">
+        <div className={`flex flex-col overflow-hidden lg:min-h-0 ${CARD} ${loading ? "opacity-60" : ""} transition-opacity`}>
+          <div className="grid shrink-0 grid-cols-7 border-b border-line">
+            {WEEKDAY_LABELS.map((d) => (
+              <div key={d} className="py-2 text-center text-xs font-medium text-fg-faint">
+                <span className="sm:hidden">{d[0]}</span>
+                <span className="hidden sm:inline">{d}</span>
+              </div>
+            ))}
+          </div>
+          <div ref={gridRef} className="grid grid-cols-7 lg:min-h-0 lg:flex-1 lg:auto-rows-fr [&>*:nth-child(7n)]:border-r-0">
+            {cells.map((day, idx) => {
+              const iso = day ? `${cursor.year}-${pad(cursor.month + 1)}-${pad(day)}` : null;
+              const lastRow = idx >= cells.length - 7;
 
-            if (!day || !iso) {
+              if (!day || !iso) {
+                return (
+                  <div key={idx} className={`min-h-16 border-r border-line bg-surface-2/40 sm:min-h-24 lg:min-h-0 ${lastRow ? "" : "border-b"}`} />
+                );
+              }
+
+              const cellEvents = (eventsByDay.get(iso) ?? []).filter((o) => !o.cancelled);
+              const cellTasks = tasksByDay.get(iso) ?? [];
+              const isToday = iso === today;
+              const isSelected = iso === selected;
+              const total = cellEvents.length + cellTasks.length;
+              const openTasks = cellTasks.filter((t) => !isTaskDone(t)).length;
+              // Leave a row for "+N more" when everything doesn't fit.
+              const slots = total > cellCap ? Math.max(1, cellCap - 1) : cellCap;
+              const shownEvents = cellEvents.slice(0, slots);
+              const shownTasks = cellTasks.slice(0, Math.max(0, slots - shownEvents.length));
+              const hidden = total - shownEvents.length - shownTasks.length;
+
               return (
-                <div key={idx} className={`min-h-16 border-r border-line bg-surface-2/40 sm:min-h-24 ${lastRow ? "" : "border-b"}`} />
-              );
-            }
-
-            const cellEvents = (eventsByDay.get(iso) ?? []).filter((o) => !o.cancelled);
-            const cellTasks = tasksByDay.get(iso) ?? [];
-            const isToday = iso === today;
-            const isSelected = iso === selected;
-            const total = cellEvents.length + cellTasks.length;
-            const openTasks = cellTasks.filter((t) => !isTaskDone(t)).length;
-            const shownEvents = cellEvents.slice(0, 3);
-            const shownTasks = cellTasks.slice(0, Math.max(0, 3 - shownEvents.length));
-
-            return (
-              <button
-                key={idx}
-                onClick={() => setSelected(iso)}
-                aria-pressed={isSelected}
-                aria-label={`${formatDateLong(iso)}, ${cellEvents.length} event${cellEvents.length === 1 ? "" : "s"}, ${cellTasks.length} task${cellTasks.length === 1 ? "" : "s"}`}
-                className={`group relative flex min-h-16 flex-col items-stretch gap-1 border-r border-line p-1.5 text-left transition-colors duration-150 sm:min-h-24 ${
-                  lastRow ? "" : "border-b"
-                } ${isSelected ? "bg-accent-soft" : "hover:bg-surface-2/70"}`}
-              >
-                <span
-                  className={`flex h-6 w-6 items-center justify-center self-start rounded-full font-mono text-xs tabular-nums ${
-                    isToday ? "bg-accent font-semibold text-accent-fg" : isSelected ? "font-semibold text-accent-text" : "text-fg-muted"
-                  }`}
+                <button
+                  key={idx}
+                  onClick={() => setSelected(iso)}
+                  aria-pressed={isSelected}
+                  aria-label={`${formatDateLong(iso)}, ${cellEvents.length} event${cellEvents.length === 1 ? "" : "s"}, ${cellTasks.length} task${cellTasks.length === 1 ? "" : "s"}`}
+                  className={`group relative flex min-h-16 flex-col items-stretch gap-1 overflow-hidden border-r border-line p-1.5 text-left transition-colors duration-150 sm:min-h-24 lg:min-h-0 ${
+                    lastRow ? "" : "border-b"
+                  } ${isSelected ? "bg-accent-soft" : "hover:bg-surface-2/70"}`}
                 >
-                  {day}
-                </span>
-
-                {/* Small screens: one count per day. */}
-                {total > 0 && (
-                  <span className="mx-auto font-mono text-[11px] tabular-nums text-fg-muted sm:hidden">
-                    {cellEvents.length + openTasks > 0 ? (
-                      cellEvents.length + openTasks
-                    ) : (
-                      <CheckIcon weight="bold" className="mx-auto h-3 w-3 text-accent" aria-hidden />
-                    )}
+                  <span
+                    className={`flex h-6 w-6 items-center justify-center self-start rounded-full font-mono text-xs tabular-nums ${
+                      isToday ? "bg-accent font-semibold text-accent-fg" : isSelected ? "font-semibold text-accent-text" : "text-fg-muted"
+                    }`}
+                  >
+                    {day}
                   </span>
-                )}
 
-                {/* Larger screens: events (with times) then tasks. */}
-                <span className="hidden space-y-0.5 sm:block">
-                  {shownEvents.map((o) => (
-                    <span key={`${o.event_id}-${o.occurrence_date}`} className="flex items-center gap-1 truncate rounded bg-surface-2 px-1 py-px text-[11px] leading-4 text-fg">
-                      <span className={`h-3 w-0.5 shrink-0 rounded-full bg-current ${eventHue(o.category)}`} aria-hidden />
-                      {!o.all_day && <span className="shrink-0 font-mono text-fg-muted">{compactTime(o.start_at)}</span>}
-                      <span className="truncate">{o.title}</span>
+                  {/* Small screens: one count per day. */}
+                  {total > 0 && (
+                    <span className="mx-auto font-mono text-[11px] tabular-nums text-fg-muted sm:hidden">
+                      {cellEvents.length + openTasks > 0 ? (
+                        cellEvents.length + openTasks
+                      ) : (
+                        <CheckIcon weight="bold" className="mx-auto h-3 w-3 text-accent" aria-hidden />
+                      )}
                     </span>
-                  ))}
-                  {shownTasks.map((t) => (
-                    <span
-                      key={t.id}
-                      className={`flex items-center gap-1 truncate rounded px-1 py-px text-[11px] leading-4 ${
-                        isTaskDone(t) ? "text-fg-faint line-through" : "text-fg-muted"
-                      }`}
-                    >
-                      <span className={`shrink-0 font-semibold ${categoryHue(t.category)}`} aria-hidden>
-                        #
+                  )}
+
+                  {/* Larger screens: events (with times) then tasks. */}
+                  <span className="hidden space-y-0.5 sm:block">
+                    {shownEvents.map((o) => (
+                      <span key={`${o.event_id}-${o.occurrence_date}`} className="flex items-center gap-1 truncate rounded bg-surface-2 px-1 py-px text-[11px] leading-4 text-fg">
+                        <span className={`h-3 w-0.5 shrink-0 rounded-full bg-current ${eventHue(o.category)}`} aria-hidden />
+                        {!o.all_day && <span className="shrink-0 font-mono text-fg-muted">{compactTime(o.start_at)}</span>}
+                        <span className="truncate">{o.title}</span>
                       </span>
-                      <span className="truncate">{t.title}</span>
-                    </span>
-                  ))}
-                  {total > 3 && <span className="block px-1 text-[11px] text-fg-faint">+{total - 3} more</span>}
-                </span>
-              </button>
-            );
-          })}
+                    ))}
+                    {shownTasks.map((t) => (
+                      <span
+                        key={t.id}
+                        className={`flex items-center gap-1 truncate rounded px-1 py-px text-[11px] leading-4 ${
+                          isTaskDone(t) ? "text-fg-faint line-through" : "text-fg-muted"
+                        }`}
+                      >
+                        <span className={`shrink-0 font-semibold ${categoryHue(t.category)}`} aria-hidden>
+                          #
+                        </span>
+                        <span className="truncate">{t.title}</span>
+                      </span>
+                    ))}
+                    {hidden > 0 && <span className="block px-1 text-[11px] text-fg-faint">+{hidden} more</span>}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
+
+        <Panel title={formatDateLong(selected)} icon={CalendarBlankIcon} iconClassName="text-fg-faint" bodyClassName="p-1" className="lg:min-h-0">
+          <div aria-live="polite" className="lg:h-full">
+            {dayEvents.length > 0 && (
+              <AgendaList occurrences={dayEvents} onOpen={(occ) => setEditor({ kind: "occurrence", occ })} bare />
+            )}
+            {dayTasks.length > 0 && (
+              <div className={dayEvents.length > 0 ? "mt-1 border-t border-line pt-1" : ""}>
+                <h3 className="px-3 pb-1 pt-2 text-xs font-medium text-fg-muted">Due this day</h3>
+                <TaskList key={selected} tasks={dayTasks} onUpdated={onUpdated} onDeleted={onDeleted} className="" />
+              </div>
+            )}
+            {dayEvents.length === 0 && dayTasks.length === 0 && (
+              <EmptyState variant="panel" icon={CalendarBlankIcon} title="Nothing this day">
+                Nothing scheduled or due.
+              </EmptyState>
+            )}
+          </div>
+        </Panel>
       </div>
 
-      <section className="mt-8 space-y-5" aria-live="polite">
-        <h2 className="flex items-center gap-2 px-1 text-[13px] font-medium text-fg-muted">
-          <CalendarBlankIcon weight="bold" className="h-4 w-4 text-fg-faint" aria-hidden />
-          {formatDateLong(selected)}
-        </h2>
-        {dayEvents.length > 0 && (
-          <AgendaList occurrences={dayEvents} onOpen={(occ) => setEditor({ kind: "occurrence", occ })} />
-        )}
-        {dayTasks.length > 0 && (
-          <div>
-            <h3 className="px-1 pb-1.5 text-[13px] font-medium text-fg-muted">Due this day</h3>
-            <TaskList key={selected} tasks={dayTasks} onUpdated={onUpdated} onDeleted={onDeleted} />
-          </div>
-        )}
-        {dayEvents.length === 0 && dayTasks.length === 0 && (
-          <p className="rounded-xl border border-dashed border-line-strong px-4 py-6 text-center text-sm text-fg-faint">
-            Nothing scheduled or due this day.
-          </p>
-        )}
-      </section>
-
       {editor && <EventEditor target={editor} onClose={() => setEditor(null)} />}
-    </div>
+    </Page>
   );
 }

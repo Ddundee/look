@@ -7,8 +7,8 @@ import { api } from "@/lib/api";
 import { addDaysIso, formatDateLong, relativeDueLabel, todayIso, weekdayLabel } from "@/lib/format";
 import { fmtGrams, fmtKcal, groupByMeal } from "@/lib/nutrition";
 import type { DaySummary, FoodEntry, HistorySummary, TargetsResponse } from "@/lib/types";
-import { BUTTON_PRIMARY, BUTTON_SECONDARY, CARD, CARD_LIST, ICON_BUTTON } from "@/lib/ui";
-import { EmptyState, ErrorState, PageHeader, TaskListSkeleton } from "@/components/PageParts";
+import { BUTTON_PRIMARY, BUTTON_SECONDARY, CARD, ICON_BUTTON } from "@/lib/ui";
+import { EmptyState, ErrorState, Page, PageHeader, Panel, TaskListSkeleton } from "@/components/PageParts";
 import FoodEntryModal from "@/components/nutrition/FoodEntryModal";
 import FoodRow from "@/components/nutrition/FoodRow";
 import MacroSummary from "@/components/nutrition/MacroSummary";
@@ -77,7 +77,7 @@ function NutritionView() {
   const stale = summary !== null && summary.day !== day;
 
   return (
-    <div>
+    <Page>
       <PageHeader
         title={dayTitle(day)}
         subtitle={formatDateLong(day)}
@@ -113,80 +113,87 @@ function NutritionView() {
 
       {!summary ? (
         !error && (
-          <div className="space-y-8" aria-busy="true">
-            <div className={`shimmer h-40 ${CARD}`} />
+          <div className="space-y-4" aria-busy="true">
+            <div className={`shimmer h-36 ${CARD}`} />
             <TaskListSkeleton rows={3} />
           </div>
         )
       ) : (
-        <div className={`space-y-10 transition-opacity ${stale ? "opacity-60" : ""}`}>
-          <section aria-label="Totals" className="anim-fade-up">
-            <MacroSummary summary={summary} onSetTargets={() => setEditingTargets(true)} />
-          </section>
+        <div
+          className={`grid gap-4 transition-opacity lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,1fr)_20rem] ${
+            stale ? "opacity-60" : ""
+          }`}
+        >
+          <div className="flex flex-col gap-4 lg:min-h-0">
+            <section aria-label="Totals" className="anim-fade-up shrink-0">
+              <MacroSummary summary={summary} onSetTargets={() => setEditingTargets(true)} />
+            </section>
 
-          <section aria-labelledby="food-log-heading">
-            <div className="flex items-center justify-between px-1 pb-2">
-              <h2 id="food-log-heading" className="text-[13px] font-medium text-fg-muted">
-                Food log
-              </h2>
-              {summary.entries.length > 0 && (
-                <button onClick={() => setEditing("new")} className={`h-8 py-0 text-[13px] ${BUTTON_PRIMARY}`}>
-                  <PlusIcon weight="bold" className="h-4 w-4" aria-hidden />
-                  Add food
-                </button>
-              )}
-            </div>
-            {summary.entries.length === 0 ? (
-              <EmptyState
-                icon={ForkKnifeIcon}
-                title={day === today ? "Nothing logged yet today" : "Nothing logged this day"}
-                action={
-                  <button onClick={() => setEditing("new")} className={BUTTON_PRIMARY}>
+            <Panel
+              title="Food log"
+              icon={ForkKnifeIcon}
+              count={summary.entries.length}
+              labelledBy="food-log-heading"
+              className="lg:flex-1"
+              bodyClassName="p-1"
+              actions={
+                summary.entries.length > 0 && (
+                  <button onClick={() => setEditing("new")} className={`h-8 py-0 text-[13px] ${BUTTON_PRIMARY}`}>
                     <PlusIcon weight="bold" className="h-4 w-4" aria-hidden />
                     Add food
                   </button>
-                }
-              >
-                Tell ChatGPT what you ate, or add it here.
-              </EmptyState>
-            ) : (
-              <div className="space-y-5">
-                {groups.map((g) => (
+                )
+              }
+            >
+              {summary.entries.length === 0 ? (
+                <EmptyState
+                  variant="panel"
+                  icon={ForkKnifeIcon}
+                  title={day === today ? "Nothing logged yet today" : "Nothing logged this day"}
+                  action={
+                    <button onClick={() => setEditing("new")} className={BUTTON_PRIMARY}>
+                      <PlusIcon weight="bold" className="h-4 w-4" aria-hidden />
+                      Add food
+                    </button>
+                  }
+                >
+                  Tell ChatGPT what you ate, or add it here.
+                </EmptyState>
+              ) : (
+                groups.map((g) => (
                   <div key={g.key}>
-                    <h3 className="flex items-baseline justify-between px-1 pb-1.5 text-[13px]">
+                    <h3 className="flex items-baseline justify-between px-3 pb-0.5 pt-2.5 text-xs">
                       <span className="font-medium text-fg">{g.label}</span>
-                      <span className="font-mono text-xs tabular-nums text-fg-faint">{fmtKcal(g.calories)} kcal</span>
+                      <span className="font-mono tabular-nums text-fg-faint">{fmtKcal(g.calories)} kcal</span>
                     </h3>
-                    <ul className={`anim-stagger ${CARD_LIST}`}>
+                    <ul className="anim-stagger">
                       {g.entries.map((e, i) => (
                         <FoodRow key={e.id} entry={e} index={i} onEdit={setEditing} onDeleted={refresh} />
                       ))}
                     </ul>
                   </div>
-                ))}
-              </div>
-            )}
-          </section>
+                ))
+              )}
+            </Panel>
+          </div>
 
           {week && (
-            <section aria-labelledby="week-heading" className="anim-fade-up">
-              <h2 id="week-heading" className="px-1 pb-3 text-[13px] font-medium text-fg-muted">
+            <section aria-labelledby="week-heading" className={`anim-fade-up self-start p-5 ${CARD}`}>
+              <h2 id="week-heading" className="pb-6 text-[13px] font-medium text-fg-muted">
                 Calories, last 7 days
               </h2>
-              <div className={`p-5 pt-8 ${CARD}`}>
-                <WeekChart days={week.days} selected={day} onSelect={goTo} />
-                <p className="mt-5 border-t border-line pt-4 text-sm text-fg-muted">
-                  {week.averages ? (
-                    <>
-                      Averaging <span className="font-mono tabular-nums text-fg">{fmtKcal(week.averages.calories)}</span>{" "}
-                      kcal and <span className="font-mono tabular-nums text-fg">{fmtGrams(week.averages.protein_g)}</span>{" "}
-                      protein over {week.logged_days} logged {week.logged_days === 1 ? "day" : "days"}.
-                    </>
-                  ) : (
-                    "No entries in these 7 days."
-                  )}
-                </p>
-              </div>
+              <WeekChart days={week.days} selected={day} onSelect={goTo} />
+              <p className="mt-5 border-t border-line pt-4 text-sm text-fg-muted">
+                {week.averages ? (
+                  <>
+                    Averaging <span className="font-mono tabular-nums text-fg">{fmtKcal(week.averages.calories)}</span>{" "}
+                    kcal and <span className="font-mono tabular-nums text-fg">{fmtGrams(week.averages.protein_g)}</span>{" "}
+                    protein over {week.logged_days} logged {week.logged_days === 1 ? "day" : "days"}.
+                  </>
+                ) : (
+                  "No entries in these 7 days."
+                )}
+              </p>
             </section>
           )}
         </div>
@@ -207,7 +214,7 @@ function NutritionView() {
           onSaved={() => refresh()}
         />
       )}
-    </div>
+    </Page>
   );
 }
 

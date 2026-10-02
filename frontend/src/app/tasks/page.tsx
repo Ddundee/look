@@ -9,7 +9,7 @@ import { PRIORITY_LABEL, STATUS_LABEL } from "@/lib/format";
 import { useTaskListState } from "@/lib/useTasks";
 import { isTaskDone, SEED_CATEGORIES, type TaskPriority, type TaskStatus } from "@/lib/types";
 import { BUTTON_GHOST_SM, BUTTON_PRIMARY, FIELD } from "@/lib/ui";
-import { EmptyState, ErrorState, PageHeader, TaskList, TaskListSkeleton } from "@/components/PageParts";
+import { EmptyState, ErrorState, Page, PageHeader, Panel, TaskList, TaskListSkeleton } from "@/components/PageParts";
 import TaskEditModal from "@/components/TaskEditModal";
 
 const STATUSES: TaskStatus[] = ["inbox", "todo", "in_progress", "blocked", "completed", "cancelled"];
@@ -58,7 +58,7 @@ function AllTasksView() {
   }
 
   return (
-    <div>
+    <Page className="mx-auto w-full max-w-5xl">
       <PageHeader
         title="All Tasks"
         subtitle={
@@ -80,7 +80,7 @@ function AllTasksView() {
         }
       />
 
-      <div className="mb-5 flex flex-wrap items-center gap-2">
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
         <div className="relative min-w-[220px] flex-1">
           <MagnifyingGlassIcon
             className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-faint"
@@ -142,43 +142,47 @@ function AllTasksView() {
       </div>
 
       {error && <ErrorState message={error} onRetry={notifyTasksChanged} />}
-      {loading ? (
-        <TaskListSkeleton rows={6} />
-      ) : tasks.length === 0 ? (
-        !error &&
-        (filtered ? (
-          <EmptyState
-            icon={MagnifyingGlassIcon}
-            title="No matches"
-            action={
-              <button onClick={clearFilters} className={BUTTON_GHOST_SM}>
-                Clear filters
-              </button>
-            }
-          >
-            Nothing fits these filters.
-          </EmptyState>
+      <Panel className="lg:flex-1">
+        {loading ? (
+          <TaskListSkeleton rows={6} className="" />
+        ) : tasks.length === 0 ? (
+          !error &&
+          (filtered ? (
+            <EmptyState
+              variant="panel"
+              icon={MagnifyingGlassIcon}
+              title="No matches"
+              action={
+                <button onClick={clearFilters} className={BUTTON_GHOST_SM}>
+                  Clear filters
+                </button>
+              }
+            >
+              Nothing fits these filters.
+            </EmptyState>
+          ) : (
+            <EmptyState
+              variant="panel"
+              icon={PlusIcon}
+              title="No tasks yet"
+              action={
+                <button onClick={() => setCreating(true)} className={BUTTON_PRIMARY}>
+                  New task
+                </button>
+              }
+            >
+              Create your first task here, or add one from the Dashboard.
+            </EmptyState>
+          ))
         ) : (
-          <EmptyState
-            icon={PlusIcon}
-            title="No tasks yet"
-            action={
-              <button onClick={() => setCreating(true)} className={BUTTON_PRIMARY}>
-                New task
-              </button>
-            }
-          >
-            Create your first task here, or add one from the Dashboard.
-          </EmptyState>
-        ))
-      ) : (
-        <TaskList tasks={sortedTasks} onUpdated={handleUpdated} onDeleted={handleDeleted} />
-      )}
+          <TaskList tasks={sortedTasks} onUpdated={handleUpdated} onDeleted={handleDeleted} className="" />
+        )}
+      </Panel>
 
       {creating && (
         <TaskEditModal task={null} onClose={() => setCreating(false)} onSaved={() => setCreating(false)} />
       )}
-    </div>
+    </Page>
   );
 }
 

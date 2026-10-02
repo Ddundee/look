@@ -9,12 +9,15 @@ import { CARD_LIST } from "@/lib/ui";
 export default function AgendaList({
   occurrences,
   onOpen,
+  bare = false,
 }: {
   occurrences: Occurrence[];
   onOpen: (occ: Occurrence) => void;
+  /** Inside a Panel, which already provides the card. */
+  bare?: boolean;
 }) {
   return (
-    <ul className={`anim-stagger ${CARD_LIST}`}>
+    <ul className={`anim-stagger ${bare ? "" : CARD_LIST}`}>
       {occurrences.map((o, i) => (
         <li key={`${o.event_id}-${o.occurrence_date}`} style={{ "--i": i } as React.CSSProperties}>
           <button

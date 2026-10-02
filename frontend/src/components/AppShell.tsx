@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -12,6 +12,7 @@ import {
   GearSixIcon,
   ListChecksIcon,
   ListIcon,
+  SidebarSimpleIcon,
   SignOutIcon,
   SquaresFourIcon,
   SunIcon,
@@ -35,6 +36,9 @@ const NAV: { href: string; label: string; icon: Icon; count?: keyof NavCounts }[
   { href: "/completed", label: "Completed", icon: CheckCircleIcon },
 ];
 
+const COLLAPSED_KEY = "look-sidebar-collapsed";
+const SHORTCUT_LABEL = "⌘S";
+
 function BrandMark() {
   return (
     <div className="flex items-center gap-2.5">
@@ -51,21 +55,40 @@ function Sidebar({
   counts,
   onNavigate,
   onLogout,
+  collapsed = false,
+  onToggleCollapsed,
 }: {
   pathname: string | null;
   counts: NavCounts | null;
   onNavigate?: () => void;
   onLogout: () => void;
+  /** Icon-only rail (desktop). */
+  collapsed?: boolean;
+  /** Desktop only; the phone drawer has no collapse button. */
+  onToggleCollapsed?: () => void;
 }) {
   const settingsActive = pathname?.startsWith("/settings");
+  const toggleLabel = `${collapsed ? "Expand" : "Collapse"} sidebar (${SHORTCUT_LABEL})`;
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-14 items-center px-4">
-        <BrandMark />
+      <div className={`flex h-14 items-center ${collapsed ? "justify-center px-2" : "justify-between pl-4 pr-2.5"}`}>
+        {!collapsed && <BrandMark />}
+        {onToggleCollapsed && (
+          <button
+            type="button"
+            onClick={onToggleCollapsed}
+            aria-label={toggleLabel}
+            aria-expanded={!collapsed}
+            title={toggleLabel}
+            className={ICON_BUTTON}
+          >
+            <SidebarSimpleIcon className="h-[18px] w-[18px]" aria-hidden />
+          </button>
+        )}
       </div>
 
-      <nav aria-label="Main" className="flex-1 space-y-0.5 px-2.5 pt-2">
+      <nav aria-label="Main" className={`flex-1 space-y-0.5 pt-2 ${collapsed ? "px-2" : "px-2.5"}`}>
         {NAV.map((item) => {
           const active = pathname?.startsWith(item.href);
           const count = item.count && counts ? counts[item.count] : 0;
@@ -77,7 +100,10 @@ function Sidebar({
               href={item.href}
               onClick={onNavigate}
               aria-current={active ? "page" : undefined}
-              className={`group flex h-9 items-center gap-2.5 rounded-lg px-2.5 text-sm transition-colors duration-150 ${
+              title={collapsed ? item.label : undefined}
+              className={`group relative flex h-9 items-center gap-2.5 rounded-lg text-sm transition-colors duration-150 ${
+                collapsed ? "justify-center px-0" : "px-2.5"
+              } ${
                 active
                   ? "bg-surface font-medium text-fg elev-1"
                   : "text-fg-muted hover:bg-surface-2 hover:text-fg"
@@ -88,8 +114,14 @@ function Sidebar({
                 className={`h-[18px] w-[18px] shrink-0 ${active ? "text-accent" : "text-fg-faint group-hover:text-fg-muted"}`}
                 aria-hidden
               />
-              <span className="flex-1">{item.label}</span>
-              {count > 0 && (
+              <span className={collapsed ? "sr-only" : "flex-1"}>{item.label}</span>
+              {collapsed && count > 0 && (
+                <span
+                  className={`absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full ${overdue > 0 ? "bg-danger" : "bg-fg-faint"}`}
+                  aria-label={overdue > 0 ? `${count} open, ${overdue} overdue` : `${count} open`}
+                />
+              )}
+              {!collapsed && count > 0 && (
                 <span
                   className={`font-mono text-xs tabular-nums ${overdue > 0 ? "text-danger" : "text-fg-faint"}`}
                   aria-label={
@@ -104,12 +136,15 @@ function Sidebar({
         })}
       </nav>
 
-      <div className="space-y-0.5 px-2.5 pb-3">
+      <div className={`space-y-0.5 pb-3 ${collapsed ? "px-2" : "px-2.5"}`}>
         <Link
           href="/settings"
           onClick={onNavigate}
           aria-current={settingsActive ? "page" : undefined}
-          className={`flex h-9 items-center gap-2.5 rounded-lg px-2.5 text-sm transition-colors duration-150 ${
+          title={collapsed ? "Settings" : undefined}
+          className={`flex h-9 items-center gap-2.5 rounded-lg text-sm transition-colors duration-150 ${
+            collapsed ? "justify-center px-0" : "px-2.5"
+          } ${
             settingsActive
               ? "bg-surface font-medium text-fg elev-1"
               : "text-fg-muted hover:bg-surface-2 hover:text-fg"
@@ -120,15 +155,20 @@ function Sidebar({
             className={`h-[18px] w-[18px] ${settingsActive ? "text-accent" : "text-fg-faint"}`}
             aria-hidden
           />
-          Settings
+          <span className={collapsed ? "sr-only" : undefined}>Settings</span>
         </Link>
-        <div className="mt-2 flex items-center justify-between border-t border-line px-1 pt-3">
+        <div
+          className={`mt-2 flex border-t border-line pt-3 ${
+            collapsed ? "flex-col items-center gap-1" : "items-center justify-between px-1"
+          }`}
+        >
           <button
             onClick={onLogout}
+            title={collapsed ? "Log out" : undefined}
             className="inline-flex h-8 items-center gap-2 rounded-lg px-2 text-[13px] text-fg-faint transition-colors hover:bg-danger-soft hover:text-danger"
           >
             <SignOutIcon className="h-4 w-4" aria-hidden />
-            Log out
+            <span className={collapsed ? "sr-only" : undefined}>Log out</span>
           </button>
           <ThemeToggle />
         </div>
@@ -141,11 +181,46 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const isLogin = pathname === "/login";
-  // The dashboard is a one-screen bento grid: wider, full height, and on
-  // tablet/desktop the page itself doesn't scroll.
-  const isDashboard = pathname?.startsWith("/dashboard") ?? false;
+  // Operational pages are app screens: wide, full height, panels scroll on
+  // their own (see Page/Panel in PageParts). Settings is configuration and
+  // reads as a document: a narrower column that scrolls as a whole.
+  const isDocument = pathname?.startsWith("/settings") ?? false;
   const counts = useNavCounts(!isLogin);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // Desktop sidebar: full, or an icon rail that gives pages more width.
+  // Remembered per browser; read after mount so server and client match.
+  const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time read of a browser-only preference
+      setCollapsed(localStorage.getItem(COLLAPSED_KEY) === "1");
+    } catch {
+      // storage unavailable: start expanded
+    }
+  }, []);
+  const toggleCollapsed = useCallback(() => {
+    setCollapsed((c) => {
+      try {
+        localStorage.setItem(COLLAPSED_KEY, c ? "0" : "1");
+      } catch {
+        // not persisted; still toggles for this visit
+      }
+      return !c;
+    });
+  }, []);
+
+  // Cmd+S / Ctrl+S toggles it (instead of the browser's "Save page").
+  useEffect(() => {
+    if (isLogin) return;
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        toggleCollapsed();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isLogin, toggleCollapsed]);
 
   useEffect(() => {
     if (!drawerOpen) return;
@@ -183,8 +258,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         Skip to content
       </a>
 
-      <aside className="hidden w-60 shrink-0 md:block">
-        <Sidebar pathname={pathname} counts={counts} onLogout={handleLogout} />
+      <aside
+        className={`hidden shrink-0 transition-[width] duration-200 ease-out md:block ${collapsed ? "w-16" : "w-60"}`}
+      >
+        <Sidebar
+          pathname={pathname}
+          counts={counts}
+          onLogout={handleLogout}
+          collapsed={collapsed}
+          onToggleCollapsed={toggleCollapsed}
+        />
       </aside>
 
       {drawerOpen && (
@@ -220,18 +303,21 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <span className="text-sm font-semibold text-fg">{currentLabel}</span>
           </div>
 
+          {/* The one page-level scroller. App pages fill it exactly on
+              desktop (h-full + min-h-0 chain), so it only scrolls when a
+              window is too short or on smaller screens. */}
           <main
             id="main"
             tabIndex={-1}
             className={`scroll-area min-h-0 flex-1 overflow-y-auto focus:outline-none ${
-              isDashboard ? "px-4 sm:px-6" : "px-4 [scrollbar-gutter:stable_both-edges] sm:px-8"
+              isDocument ? "px-4 [scrollbar-gutter:stable_both-edges] sm:px-8" : "px-4 sm:px-6"
             }`}
           >
             <div
               className={
-                isDashboard
-                  ? "mx-auto h-full w-full max-w-7xl py-4 sm:py-6"
-                  : "mx-auto w-full max-w-3xl pb-24 pt-8 sm:pt-10"
+                isDocument
+                  ? "mx-auto w-full max-w-3xl pb-16 pt-6 sm:pt-8"
+                  : "mx-auto flex min-h-full w-full max-w-7xl flex-col py-4 sm:py-5 md:h-full"
               }
             >
               {children}
