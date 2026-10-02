@@ -1,4 +1,10 @@
 import type {
+  LeetCodeAttempt,
+  LeetCodeAttemptPayload,
+  LeetCodeGoals,
+  LeetCodeProblemSummary,
+  LeetCodeStats,
+  LeetCodeTopicStats,
   UpdateJob,
   UpdateStatus,
   CalendarEvent,
@@ -190,4 +196,20 @@ export const api = {
   getUpdateStatus: (refresh = false) =>
     request<UpdateStatus>(`/api/system/update${qs({ refresh: refresh || undefined })}`),
   startUpdate: () => request<{ job: UpdateJob }>("/api/system/update", { method: "POST" }),
+
+  getLeetCodeStats: () => request<LeetCodeStats>("/api/leetcode/stats"),
+  getLeetCodeTopics: () => request<LeetCodeTopicStats>("/api/leetcode/topics"),
+  listLeetCodeAttempts: (params: { limit?: number; difficulty?: string; topic?: string; solved?: boolean } = {}) =>
+    request<{ attempts: LeetCodeAttempt[]; count: number }>(`/api/leetcode/attempts${qs(params)}`),
+  listLeetCodeProblems: (params: { difficulty?: string; topic?: string; q?: string } = {}) =>
+    request<{ problems: LeetCodeProblemSummary[]; count: number }>(`/api/leetcode/problems${qs(params)}`),
+  logLeetCodeAttempt: (payload: LeetCodeAttemptPayload) =>
+    request<{ attempt: LeetCodeAttempt; problem_created: boolean; progress: LeetCodeStats }>("/api/leetcode/attempts", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  deleteLeetCodeAttempt: (id: string) =>
+    request<{ deleted_id: string }>(`/api/leetcode/attempts/${id}`, { method: "DELETE" }),
+  setLeetCodeGoals: (goals: { daily_target: number; weekly_target: number }) =>
+    request<LeetCodeGoals>("/api/leetcode/goals", { method: "PUT", body: JSON.stringify(goals) }),
 };

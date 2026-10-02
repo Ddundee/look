@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   CalendarDotsIcon,
   CheckCircleIcon,
+  CodeIcon,
   TreePalmIcon,
   ForkKnifeIcon,
   GearSixIcon,
@@ -30,6 +31,7 @@ const NAV: { href: string; label: string; icon: Icon; count?: keyof NavCounts }[
   { href: "/tasks", label: "All Tasks", icon: ListChecksIcon },
   { href: "/calendar", label: "Calendar", icon: CalendarDotsIcon },
   { href: "/nutrition", label: "Nutrition", icon: ForkKnifeIcon },
+  { href: "/leetcode", label: "LeetCode", icon: CodeIcon },
   { href: "/completed", label: "Completed", icon: CheckCircleIcon },
 ];
 
