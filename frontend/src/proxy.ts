@@ -12,7 +12,10 @@ export function proxy(request: NextRequest) {
   const hasSession = Boolean(request.cookies.get(SESSION_COOKIE)?.value);
 
   if (pathname === "/login") {
-    if (hasSession) {
+    // ?expired=1 means the backend just rejected this session: stay here
+    // even if a (stale) cookie is still present, or the two redirects would
+    // bounce forever. The backend also clears an invalid cookie on its 401.
+    if (hasSession && !request.nextUrl.searchParams.has("expired")) {
       return NextResponse.redirect(new URL("/dashboard", request.url));
     }
     return NextResponse.next();

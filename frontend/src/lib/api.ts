@@ -37,12 +37,14 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   });
 
   if (res.status === 401) {
-    if (typeof window !== "undefined") {
+    // A wrong password at login is also a 401: let the login page show it.
+    if (typeof window !== "undefined" && path !== "/api/auth/login" && window.location.pathname !== "/login") {
       // Hard navigation on purpose: this is a plain fetch helper with no
       // router instance, and a full reload also clears any stale client
-      // state left over from the now-invalid session.
+      // state left over from the now-invalid session. `expired` tells
+      // proxy.ts not to bounce back into the app on a leftover cookie.
       // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-      window.location.href = "/login";
+      window.location.href = "/login?expired=1";
     }
     throw new ApiError(401, "Not authenticated");
   }

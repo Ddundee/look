@@ -1,11 +1,20 @@
 from typing import Iterator, Optional
 
-from fastapi import Cookie, Header, HTTPException, status
+from fastapi import Cookie, Header, HTTPException, Response, status
 from sqlmodel import Session
 
 from app.config import get_settings
 from app.db import get_session
 from app.security import SESSION_COOKIE_NAME, constant_time_equals, decode_session_token
+
+
+def _clear_cookie_header(name: str) -> str:
+    response = Response()
+    response.delete_cookie(name)  # same attributes as /api/auth/logout
+    return response.headers["set-cookie"]
+
+
+_CLEAR_SESSION_COOKIE = _clear_cookie_header(SESSION_COOKIE_NAME)
 
 
 def get_db() -> Iterator[Session]:
@@ -36,8 +45,15 @@ def require_auth(
         if username:
             return username
 
+    headers = {"WWW-Authenticate": "Bearer"}
+    if todo_session:
+        # The cookie was sent but is invalid (expired, or signed with an old
+        # SESSION_SECRET). Tell the browser to drop it: the frontend's proxy
+        # only checks that a session cookie exists, so a stale one would
+        # otherwise bounce the user between /login and the app forever.
+        headers["Set-Cookie"] = _CLEAR_SESSION_COOKIE
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Not authenticated",
-        headers={"WWW-Authenticate": "Bearer"},
+        headers=headers,
     )
