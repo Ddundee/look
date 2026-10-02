@@ -187,6 +187,22 @@ series. Deletes only happen when asked.
 | `delete_event` | Permanently delete a one-off or a whole series |
 | `check_conflicts` | Timed events overlapping a slot (all-day events don't count) |
 
+### LeetCode tracking
+
+What the user actually solved, separate from tasks (plans). Problems are
+identified by their LeetCode number, so logging the same problem again adds
+an attempt to it. See [`LEETCODE.md`](LEETCODE.md) for how stats, streaks
+and topic weakness are calculated.
+
+| Tool | Description |
+|---|---|
+| `log_leetcode_attempt` | Record an attempt: problem number, plus title/difficulty the first time; topics, solved, solved_independently (defaults to solved without a hint), hint_used, duration_minutes, language, confidence 1-5, notes. Returns updated progress |
+| `get_leetcode_progress` | Totals, by difficulty, rates, streaks, today/week vs goals, insights |
+| `get_recent_leetcode_attempts` | Newest attempts, filterable by difficulty, topic, solved |
+| `get_leetcode_topic_stats` | Per-topic progress, weakest first, with the reasons |
+| `get_leetcode_problem` | One problem by number, with every attempt |
+| `set_leetcode_goals` | Daily and weekly targets |
+
 ## Resources (read-only)
 
 | URI | Contents |
@@ -195,6 +211,7 @@ series. Deletes only happen when asked.
 | `tasks://overdue` | Same payload as `get_overdue_tasks` |
 | `tasks://upcoming` | Same payload as `get_upcoming_tasks` |
 | `nutrition://today` | Same payload as `get_nutrition_day` |
+| `leetcode://progress` | Same payload as `get_leetcode_progress` |
 | `events://today` | Same payload as `get_schedule` for today |
 
 ## Example prompts once connected
@@ -207,5 +224,7 @@ series. Deletes only happen when asked.
 - "What did I accomplish this week?"
 - "I had 2 eggs and a slice of toast for breakfast."
 - "How am I doing on protein this week?"
+- "I solved LeetCode 560 in 23 minutes in Java, needed one hint, confidence 3/5."
+- "Which LeetCode topics am I weakest at?"
 - "Add CS 101, Mon/Wed/Fri 10 to 10:50 through Dec 12, skipping Thanksgiving week."
 - "No class this Friday."
