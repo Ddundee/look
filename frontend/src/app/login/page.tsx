@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { TreePalmIcon, CircleNotchIcon, EyeIcon, EyeSlashIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import { api, ApiError } from "@/lib/api";
 import { BUTTON_PRIMARY, FIELD, LABEL } from "@/lib/ui";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const expired = useSearchParams().has("expired");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -42,7 +43,9 @@ export default function LoginPage() {
           </span>
           <div>
             <h1 className="text-xl font-semibold tracking-tight text-fg">Sign in to Look</h1>
-            <p className="mt-1 text-sm text-fg-muted">Tasks, schedule and food, in one place.</p>
+            <p className="mt-1 text-sm text-fg-muted">
+              {expired ? "Your session expired. Sign in again." : "Tasks, schedule and food, in one place."}
+            </p>
           </div>
         </div>
 
@@ -110,5 +113,13 @@ export default function LoginPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   );
 }

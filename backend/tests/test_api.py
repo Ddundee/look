@@ -92,3 +92,32 @@ def test_ranked_endpoint_orders_by_score(client, auth_headers):
     resp = client.get("/api/tasks/ranked", headers=auth_headers)
     titles = [t["title"] for t in resp.json()["tasks"]]
     assert titles[0] == "urgent"
+
+
+def _clears_session_cookie(resp) -> bool:
+    return any(
+        h.startswith("todo_session=") and "Max-Age=0" in h for h in resp.headers.get_list("set-cookie")
+    )
+
+
+def test_invalid_session_cookie_is_cleared_on_401(client):
+    # An expired or foreign-secret cookie must be dropped, or the frontend's
+    # cookie-presence check keeps bouncing between /login and the app.
+    client.cookies.set("todo_session", "not-a-valid-token")
+    resp = client.get("/api/tasks")
+    assert resp.status_code == 401
+    assert _clears_session_cookie(resp)
+
+
+def test_401_without_a_cookie_sets_nothing(client):
+    resp = client.get("/api/tasks", headers={"Authorization": "Bearer wrong"})
+    assert resp.status_code == 401
+    assert resp.headers.get_list("set-cookie") == []
+
+
+def test_valid_session_still_works(client):
+    login = client.post("/api/auth/login", json={"username": "admin", "password": "admin-password"})
+    assert login.status_code == 200
+    resp = client.get("/api/tasks")
+    assert resp.status_code == 200
+    assert not _clears_session_cookie(resp)
