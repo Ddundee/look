@@ -42,3 +42,9 @@ class MealType(str, Enum):
     lunch = "lunch"
     dinner = "dinner"
     snack = "snack"
+
+
+class LeetCodeDifficulty(str, Enum):
+    easy = "easy"
+    medium = "medium"
+    hard = "hard"
