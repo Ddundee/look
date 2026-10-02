@@ -9,7 +9,7 @@ from app import db
 from app import migrate as migrations
 from app.config import get_settings
 from app.logging_config import configure_logging
-from app.routers import auth, events, nutrition, recurring, system, tasks, today
+from app.routers import auth, events, leetcode, nutrition, recurring, system, tasks, today
 from app.seed import seed_demo_data
 from app.services.auth import ensure_admin_user
 
@@ -54,6 +54,7 @@ app.include_router(today.router)
 app.include_router(recurring.router)
 app.include_router(nutrition.router)
 app.include_router(events.router)
+app.include_router(leetcode.router)
 app.include_router(system.router)
 
 

@@ -1,9 +1,9 @@
 from datetime import date, datetime, time
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.models.enums import MealType, RecurrencePattern, TaskPriority, TaskStatus
+from app.models.enums import LeetCodeDifficulty, MealType, RecurrencePattern, TaskPriority, TaskStatus
 
 
 # ---------------------------------------------------------------------------
@@ -408,3 +408,195 @@ class ScheduleResponse(BaseModel):
 class EventList(BaseModel):
     events: List[EventRead]
     count: int
+
+
+# ---------------------------------------------------------------------------
+# LeetCode tracking
+# ---------------------------------------------------------------------------
+
+
+def _clean_title(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    value = value.strip()
+    if not value:
+        raise ValueError("title can't be blank")
+    return value
+
+
+class LeetCodeProblemCreate(BaseModel):
+    number: int = Field(ge=1, le=100000)
+    title: str = Field(min_length=1, max_length=200)
+    difficulty: LeetCodeDifficulty
+    topics: List[str] = Field(default_factory=list)
+    slug: Optional[str] = Field(default=None, max_length=200)
+    url: Optional[str] = Field(default=None, max_length=500)
+
+    @field_validator("title")
+    @classmethod
+    def _strip_title(cls, v: Optional[str]) -> Optional[str]:
+        return _clean_title(v)
+
+
+class LeetCodeProblemUpdate(BaseModel):
+    title: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    difficulty: Optional[LeetCodeDifficulty] = None
+    topics: Optional[List[str]] = None
+    slug: Optional[str] = Field(default=None, max_length=200)
+    url: Optional[str] = Field(default=None, max_length=500)
+
+    @field_validator("title")
+    @classmethod
+    def _strip_title(cls, v: Optional[str]) -> Optional[str]:
+        return _clean_title(v)
+
+
+class LeetCodeAttemptCreate(BaseModel):
+    """One attempt, identified by problem number. title/difficulty are
+    required only the first time a problem is logged; topics are merged
+    into the problem's list."""
+
+    problem_number: int = Field(ge=1, le=100000)
+    title: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    difficulty: Optional[LeetCodeDifficulty] = None
+    topics: List[str] = Field(default_factory=list)
+    solved: bool = True
+    # None = derive it: solved without a hint.
+    solved_independently: Optional[bool] = None
+    hint_used: bool = False
+    duration_minutes: Optional[int] = Field(default=None, ge=0, le=1440)
+    language: Optional[str] = Field(default=None, max_length=40)
+    confidence: Optional[int] = Field(default=None, ge=1, le=5)
+    notes: Optional[str] = None
+    attempted_at: Optional[datetime] = None  # local time; defaults to now
+
+    @field_validator("title")
+    @classmethod
+    def _strip_title(cls, v: Optional[str]) -> Optional[str]:
+        return _clean_title(v)
+
+    @model_validator(mode="after")
+    def _consistent(self):
+        if self.solved_independently and not self.solved:
+            raise ValueError("solved_independently needs solved=true")
+        if self.solved_independently and self.hint_used:
+            raise ValueError("an attempt that used a hint isn't solved independently")
+        return self
+
+
+class LeetCodeProblemRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    number: int
+    title: str
+    slug: Optional[str]
+    url: Optional[str]
+    difficulty: LeetCodeDifficulty
+    topics: List[str]
+    created_at: datetime
+    updated_at: datetime
+
+
+class LeetCodeProblemSummary(LeetCodeProblemRead):
+    attempts: int = 0
+    solved: bool = False
+    last_attempted_at: Optional[datetime] = None
+    last_confidence: Optional[int] = None
+
+
+class LeetCodeAttemptRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    problem_id: str
+    attempted_at: datetime
+    solved: bool
+    solved_independently: bool
+    hint_used: bool
+    duration_minutes: Optional[int]
+    language: Optional[str]
+    confidence: Optional[int]
+    notes: Optional[str]
+    source: str
+    created_at: datetime
+    problem: LeetCodeProblemRead
+
+
+class LeetCodeGoalsRead(BaseModel):
+    daily_target: int
+    weekly_target: int
+    customized: bool  # false = built-in defaults, never changed
+
+
+class LeetCodeGoalsSet(BaseModel):
+    daily_target: int = Field(ge=0, le=50)
+    weekly_target: int = Field(ge=0, le=300)
+
+
+class DifficultyCounts(BaseModel):
+    easy: int = 0
+    medium: int = 0
+    hard: int = 0
+
+
+class LeetCodeStats(BaseModel):
+    total_solved: int  # distinct problems with at least one solved attempt
+    solved_by_difficulty: DifficultyCounts
+    total_attempts: int
+    solved_attempts: int
+    avg_solve_minutes: Optional[float]  # solved attempts that recorded a duration
+    hint_usage_rate: Optional[float]  # share of all attempts that used a hint
+    independent_solve_rate: Optional[float]  # share of all attempts solved without help
+    current_streak: int
+    best_streak: int
+    solved_today: int  # solved attempts today, re-solves included
+    solved_this_week: int  # same, Monday to today
+    week_start: date
+    goals: LeetCodeGoalsRead
+    insights: List[str]
+
+
+class LeetCodeTopicStat(BaseModel):
+    topic: str
+    problems: int
+    solved_problems: int
+    attempts: int
+    # Over this topic's most recent attempts (window in LeetCodeTopicStats).
+    recent_attempts: int
+    recent_solve_rate: float
+    recent_independent_rate: float
+    recent_hint_rate: float
+    recent_avg_confidence: Optional[float]
+    # 0 (strong) .. 1 (weak): mean of the factors above; None when there are
+    # too few recent attempts to judge.
+    weakness: Optional[float]
+    reasons: List[str]
+
+
+class LeetCodeTopicStats(BaseModel):
+    topics: List[LeetCodeTopicStat]  # weakest first, unrated last
+    weakest: List[str]
+    recent_window: int
+    min_attempts: int
+
+
+class LeetCodeAttemptLogged(BaseModel):
+    attempt: LeetCodeAttemptRead
+    problem_created: bool
+    progress: LeetCodeStats
+
+
+class LeetCodeAttemptList(BaseModel):
+    attempts: List[LeetCodeAttemptRead]
+    count: int
+
+
+class LeetCodeProblemList(BaseModel):
+    problems: List[LeetCodeProblemSummary]
+    count: int
+
+
+class LeetCodeProblemDetail(BaseModel):
+    problem: LeetCodeProblemSummary
+    attempts: List[LeetCodeAttemptRead]
