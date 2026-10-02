@@ -269,3 +269,101 @@ export interface UpdateStatus {
   check_error?: string | null;
   job?: UpdateJob;
 }
+
+// ---- LeetCode tracking ------------------------------------------------------
+
+export type LeetCodeDifficulty = "easy" | "medium" | "hard";
+
+export interface LeetCodeProblem {
+  id: string;
+  number: number;
+  title: string;
+  slug: string | null;
+  url: string | null;
+  difficulty: LeetCodeDifficulty;
+  topics: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LeetCodeProblemSummary extends LeetCodeProblem {
+  attempts: number;
+  solved: boolean;
+  last_attempted_at: string | null;
+  last_confidence: number | null;
+}
+
+export interface LeetCodeAttempt {
+  id: string;
+  problem_id: string;
+  attempted_at: string;
+  solved: boolean;
+  solved_independently: boolean;
+  hint_used: boolean;
+  duration_minutes: number | null;
+  language: string | null;
+  confidence: number | null;
+  notes: string | null;
+  source: string;
+  created_at: string;
+  problem: LeetCodeProblem;
+}
+
+export interface LeetCodeGoals {
+  daily_target: number;
+  weekly_target: number;
+  customized: boolean;
+}
+
+export interface LeetCodeStats {
+  total_solved: number;
+  solved_by_difficulty: Record<LeetCodeDifficulty, number>;
+  total_attempts: number;
+  solved_attempts: number;
+  avg_solve_minutes: number | null;
+  hint_usage_rate: number | null;
+  independent_solve_rate: number | null;
+  current_streak: number;
+  best_streak: number;
+  solved_today: number;
+  solved_this_week: number;
+  week_start: string;
+  goals: LeetCodeGoals;
+  insights: string[];
+}
+
+export interface LeetCodeTopicStat {
+  topic: string;
+  problems: number;
+  solved_problems: number;
+  attempts: number;
+  recent_attempts: number;
+  recent_solve_rate: number;
+  recent_independent_rate: number;
+  recent_hint_rate: number;
+  recent_avg_confidence: number | null;
+  weakness: number | null;
+  reasons: string[];
+}
+
+export interface LeetCodeTopicStats {
+  topics: LeetCodeTopicStat[];
+  weakest: string[];
+  recent_window: number;
+  min_attempts: number;
+}
+
+export interface LeetCodeAttemptPayload {
+  problem_number: number;
+  title?: string | null;
+  difficulty?: LeetCodeDifficulty | null;
+  topics?: string[];
+  solved?: boolean;
+  solved_independently?: boolean | null;
+  hint_used?: boolean;
+  duration_minutes?: number | null;
+  language?: string | null;
+  confidence?: number | null;
+  notes?: string | null;
+  attempted_at?: string | null;
+}

@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CalendarBlankIcon, CalendarCheckIcon, FireIcon, SunIcon, WarningCircleIcon } from "@phosphor-icons/react";
+import Link from "next/link";
+import { CalendarBlankIcon, CalendarCheckIcon, CaretRightIcon, CodeIcon, FireIcon, SunIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import { api } from "@/lib/api";
 import { notifyTasksChanged, onEventsChanged, onTasksChanged } from "@/lib/events";
 import { formatDateLong, todayIso } from "@/lib/format";
-import { isTaskDone, type Occurrence, type Task, type TodayView } from "@/lib/types";
+import { isTaskDone, type LeetCodeStats, type Occurrence, type Task, type TodayView } from "@/lib/types";
 import { SECTION_HEADING } from "@/lib/ui";
 import { EmptyState, ErrorState, PageHeader, TaskListSkeleton, TaskSection } from "@/components/PageParts";
 import AgendaList from "@/components/events/AgendaList";
@@ -25,6 +26,15 @@ export default function TodayPage() {
   const [error, setError] = useState<string | null>(null);
   const [schedule, setSchedule] = useState<Occurrence[]>([]);
   const [editor, setEditor] = useState<EditorTarget | null>(null);
+
+  // LeetCode at a glance; shown only once something has been logged.
+  const [leetcode, setLeetcode] = useState<LeetCodeStats | null>(null);
+  useEffect(() => {
+    api
+      .getLeetCodeStats()
+      .then(setLeetcode)
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     function loadSchedule() {
@@ -113,6 +123,31 @@ export default function TodayPage() {
           ) : undefined
         }
       />
+
+      {leetcode && leetcode.total_attempts > 0 && (
+        <Link
+          href="/leetcode"
+          className="anim-fade-up group -mt-4 mb-8 flex items-center gap-3 rounded-xl bg-surface px-4 py-2.5 text-sm text-fg elev-1 transition-colors hover:bg-surface-2/70"
+        >
+          <CodeIcon weight="bold" className="h-4 w-4 shrink-0 text-accent" aria-hidden />
+          <span className="font-medium">LeetCode</span>
+          <span className="font-mono tabular-nums text-fg-muted">
+            {leetcode.solved_today}/{leetcode.goals.daily_target} today
+          </span>
+          <span className="hidden font-mono tabular-nums text-fg-muted sm:inline">
+            {leetcode.solved_this_week}/{leetcode.goals.weekly_target} this week
+          </span>
+          {leetcode.current_streak > 0 && (
+            <span className="inline-flex items-center gap-1 text-fg-muted">
+              <FireIcon weight="fill" className="h-3.5 w-3.5 text-warn" aria-hidden />
+              <span>
+                <span className="font-mono tabular-nums">{leetcode.current_streak}</span>-day streak
+              </span>
+            </span>
+          )}
+          <CaretRightIcon className="ml-auto h-4 w-4 text-fg-faint transition-transform group-hover:translate-x-0.5" aria-hidden />
+        </Link>
+      )}
 
       {nothingToShow && schedule.length === 0 ? (
         <EmptyState icon={CalendarCheckIcon} title="A clear day">

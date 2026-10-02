@@ -43,7 +43,8 @@ See [`docs/TASK_MODEL.md`](docs/TASK_MODEL.md) for the data model and
 priority-scoring logic, [`docs/MCP.md`](docs/MCP.md) for the full list of
 MCP tools/resources and client setup, [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
 for Raspberry Pi deployment, [`docs/DATABASE.md`](docs/DATABASE.md) for
-migrations, backups and safe upgrades, and [`docs/TAILSCALE.md`](docs/TAILSCALE.md)
+migrations, backups and safe upgrades, [`docs/LEETCODE.md`](docs/LEETCODE.md) for
+LeetCode tracking, and [`docs/TAILSCALE.md`](docs/TAILSCALE.md)
 for secure remote access.
 
 ## Quickstart: Docker Compose (recommended)

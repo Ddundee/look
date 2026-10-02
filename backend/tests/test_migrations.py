@@ -20,6 +20,7 @@ from app.models import Event, EventOverride, FoodEntry, NutritionTarget, Recurre
 from app.models.enums import MealType, RecurrencePattern, TaskPriority, TaskStatus
 
 MODEL_TABLES = set(SQLModel.metadata.tables)
+BASELINE_TABLES = set(migrations.baseline_schema())
 CORE_TABLES = ["users", "recurrence_rules", "tasks"]
 
 BACKENDS = [
@@ -51,9 +52,11 @@ def db(request, tmp_path):
 
 
 def build_pre_alembic_db(engine, tables=None):
-    """Exactly what every Look version before Alembic did at startup."""
-    selected = [SQLModel.metadata.tables[t] for t in tables] if tables else None
-    SQLModel.metadata.create_all(engine, tables=selected)
+    """What every Look version before Alembic did at startup: create_all()
+    over the models that existed then, i.e. the baseline's tables. (Models
+    added later, like the LeetCode tables, never existed pre-Alembic.)"""
+    names = tables or sorted(migrations.baseline_schema())
+    SQLModel.metadata.create_all(engine, tables=[SQLModel.metadata.tables[t] for t in names])
 
 
 def seed_core(session: Session) -> None:
@@ -154,7 +157,7 @@ def test_pre_alembic_database_is_adopted_without_losing_data(db):
 
     assert migrations.migrate(db) == migrations.head_revision()
 
-    assert snapshot(db) == before
+    assert snapshot(db, before.keys()) == before  # every pre-existing table unchanged
     with db.connect() as conn:
         assert conn.execute(sa.text("SELECT company FROM recruiting_details")).scalar() == "Acme Robotics"
     migrations.check_drift(db)  # schema now matches the models; legacy table ignored, not dropped
@@ -209,7 +212,10 @@ def test_downgrade_requires_explicit_flag_then_round_trips(db):
     migrations.migrate(db)
     with pytest.raises(RuntimeError, match="allow-data-loss"):
         migrations.downgrade(db, "base")
+    # The baseline's guard stops it and the whole downgrade rolls back,
+    # including 0002's step before it (on SQLite too).
     assert MODEL_TABLES <= tables_in(db)
+    assert migrations.database_revision(db) == migrations.head_revision()
 
     migrations.downgrade(db, "base", allow_data_loss=True)
     assert not (MODEL_TABLES & tables_in(db))
@@ -255,3 +261,56 @@ def test_migrate_command_exits_nonzero_so_containers_dont_start(tmp_path, monkey
     monkeypatch.setattr(db_module, "engine", fresh)
     assert migrations.main() == 0
     assert migrations.assert_at_head(fresh) == migrations.head_revision()
+
+
+# ---- 0002: LeetCode tracking ------------------------------------------------
+
+LEETCODE_TABLES = {"leetcode_problems", "leetcode_attempts", "leetcode_goals"}
+
+
+def seed_leetcode(engine):
+    from app.schemas import LeetCodeAttemptCreate
+    from app.services import leetcode as leetcode_svc
+
+    with Session(engine) as session:
+        leetcode_svc.log_attempt(session, LeetCodeAttemptCreate(
+            problem_number=560, title="Subarray Sum Equals K", difficulty="medium", topics=["Prefix Sum"],
+            hint_used=True, duration_minutes=23, language="Java", confidence=3,
+        ))
+
+
+def test_leetcode_migration_is_additive_and_reversible(db):
+    migrations.migrate(db)
+    assert LEETCODE_TABLES <= tables_in(db)
+    with Session(db) as session:
+        seed_core(session)
+        seed_new_features(session)
+        session.commit()
+    others = snapshot(db, MODEL_TABLES - LEETCODE_TABLES)
+
+    migrations.downgrade(db, "0001_baseline")  # no LeetCode data yet: allowed
+    assert not (LEETCODE_TABLES & tables_in(db))
+    assert snapshot(db, MODEL_TABLES - LEETCODE_TABLES) == others
+    assert migrations.database_revision(db) == "0001_baseline"
+
+    assert migrations.migrate(db) == migrations.head_revision()
+    seed_leetcode(db)
+    assert snapshot(db, MODEL_TABLES - LEETCODE_TABLES) == others
+    migrations.check_drift(db)
+
+
+def test_leetcode_downgrade_with_data_needs_explicit_flag(db):
+    migrations.migrate(db)
+    seed_leetcode(db)
+    with Session(db) as session:
+        seed_core(session)
+        session.commit()
+    others = snapshot(db, MODEL_TABLES - LEETCODE_TABLES)
+
+    with pytest.raises(RuntimeError, match="allow-data-loss"):
+        migrations.downgrade(db, "0001_baseline")
+    assert LEETCODE_TABLES <= tables_in(db)
+
+    migrations.downgrade(db, "0001_baseline", allow_data_loss=True)
+    assert not (LEETCODE_TABLES & tables_in(db))
+    assert snapshot(db, MODEL_TABLES - LEETCODE_TABLES) == others

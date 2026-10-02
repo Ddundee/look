@@ -16,3 +16,10 @@ def local_today() -> date:
     on the wrong day."""
     settings = get_settings()
     return datetime.now(ZoneInfo(settings.app_timezone)).date()
+
+
+def local_now() -> datetime:
+    """Current wall-clock time in APP_TIMEZONE, naive (like the other local
+    timestamps the app stores), so its .date() matches local_today()."""
+    settings = get_settings()
+    return datetime.now(ZoneInfo(settings.app_timezone)).replace(tzinfo=None, microsecond=0)

@@ -15,17 +15,19 @@ Three kinds of database are handled:
   what's wrong. Otherwise `upgrade head` runs; the baseline only creates
   tables that are missing, so existing tables and their rows stay as-is.
 
-On PostgreSQL the whole upgrade runs in one transaction (a failure leaves
-the schema as it was) under an advisory lock, so the API and MCP containers
+The whole upgrade runs in one transaction, DDL included, so a failure
+leaves the schema as it was (on SQLite too, see _transaction). On
+PostgreSQL it also holds an advisory lock, so the API and MCP containers
 starting together don't both try to migrate.
 """
 
 import logging
 import sys
+from contextlib import contextmanager
 from argparse import Namespace
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Dict, Iterator, List, Optional, Set
 
 import sqlalchemy as sa
 from alembic import command
@@ -44,6 +46,34 @@ logger = logging.getLogger("todo_app.migrate")
 
 class MigrationError(RuntimeError):
     pass
+
+
+@contextmanager
+def _transaction(engine: Engine) -> Iterator[Connection]:
+    """A transaction that also covers DDL, so a failed migration rolls back
+    completely. PostgreSQL does this natively. Python's sqlite3 driver
+    commits before every CREATE/DROP, which would leave a half-applied
+    migration behind; for SQLite, use SQLAlchemy's documented recipe (driver
+    autocommit off, explicit BEGIN) on a dedicated engine."""
+    if engine.dialect.name != "sqlite" or engine.url.database in (None, "", ":memory:"):
+        with engine.begin() as conn:
+            yield conn
+        return
+    scoped = sa.create_engine(engine.url)
+
+    @sa.event.listens_for(scoped, "connect")
+    def _no_driver_transactions(dbapi_connection, _record):
+        dbapi_connection.isolation_level = None
+
+    @sa.event.listens_for(scoped, "begin")
+    def _explicit_begin(conn):
+        conn.exec_driver_sql("BEGIN")
+
+    try:
+        with scoped.begin() as conn:
+            yield conn
+    finally:
+        scoped.dispose()
 
 
 def alembic_config(connection: Optional[Connection] = None, x_args: Optional[Dict[str, str]] = None) -> Config:
@@ -133,7 +163,7 @@ def migrate(engine: Engine) -> str:
             lock_conn.execute(sa.text("SELECT pg_advisory_lock(:key)"), {"key": ADVISORY_LOCK_KEY})
             lock_conn.commit()
         try:
-            with engine.begin() as conn:
+            with _transaction(engine) as conn:
                 _upgrade(conn)
                 return current_revision(conn)
         finally:
@@ -162,7 +192,7 @@ def check_drift(engine: Engine) -> None:
 
 
 def downgrade(engine: Engine, revision: str, allow_data_loss: bool = False) -> None:
-    with engine.begin() as conn:
+    with _transaction(engine) as conn:
         command.downgrade(alembic_config(conn, {"allow-data-loss": "true"} if allow_data_loss else None), revision)
 
 
