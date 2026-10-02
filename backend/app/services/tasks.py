@@ -8,6 +8,7 @@ from app.models.task import Task
 from app.schemas import TaskCreate, TaskRead, TaskUpdate
 from app.services import recurrence as recurrence_service
 from app.services.priority import compute_priority
+from app.services import categories as categories_service
 from app.utils import local_today, utcnow, week_start
 
 ACTIVE_STATUSES = (
@@ -38,6 +39,7 @@ def create_task(session: Session, data: TaskCreate) -> Task:
         notes=data.notes,
         planned_for_date=data.planned_for_date,
     )
+    categories_service.ensure(session, task.category)
     session.add(task)
     session.commit()
     session.refresh(task)
@@ -60,6 +62,7 @@ def list_tasks(
     due_after: Optional[date] = None,
     planned_for_date: Optional[date] = None,
     include_completed: bool = True,
+    undated: bool = False,
 ) -> List[Task]:
     query = select(Task)
 
@@ -80,6 +83,8 @@ def list_tasks(
         query = query.where(Task.due_date >= due_after)
     if planned_for_date is not None:
         query = query.where(Task.planned_for_date == planned_for_date)
+    if undated:
+        query = query.where(Task.due_date.is_(None))
 
     query = query.order_by(Task.due_date.is_(None), Task.due_date, Task.created_at)
     tasks = list(session.exec(query).all())
@@ -106,6 +111,8 @@ def update_task(session: Session, task: Task, data: TaskUpdate) -> Task:
     updates = data.model_dump(exclude_unset=True)
     for field_name, value in updates.items():
         setattr(task, field_name, value)
+    if "category" in updates:
+        categories_service.ensure(session, task.category)
     _touch(task)
 
     session.add(task)

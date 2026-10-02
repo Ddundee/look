@@ -34,6 +34,11 @@ from app.config import get_settings
 from app.logging_config import configure_logging
 from app.models.enums import RecurrencePattern, TaskPriority, TaskStatus
 from app.schemas import (
+    CategoryCreate,
+    CategoryRead,
+    CategoryUpdate,
+    CourseCreate,
+    CourseUpdate,
     CalendarSubscriptionCreate,
     CalendarSubscriptionUpdate,
     LeetCodeAttemptCreate,
@@ -52,6 +57,9 @@ from app.schemas import (
 )
 from app.security import constant_time_equals
 from app.services import calendar_sync
+from app.services import categories as categories_service
+from app.services import courses as courses_service
+from app.services import planning as planning_service
 from app.services import events as events_service
 from app.services import leetcode as leetcode_service
 from app.services import nutrition as nutrition_service
@@ -85,7 +93,9 @@ mcp = MCPServer(
         "Imported events are read-only, except that deadlines (assignments, "
         "is_deadline/deadline=true) can be checked off with "
         "set_deadline_completed; find them with get_deadlines or "
-        "find_events. Dates are ISO "
+        "find_events. get_work_plan lists tasks and assignments to do "
+        "together. Assignments and class meetings carry their course "
+        "(class); map_event_to_course fixes a wrong or missing one. Dates are ISO "
         "'YYYY-MM-DD', times are "
         "'HH:MM' 24-hour."
     ),
@@ -1194,6 +1204,141 @@ def import_ics(content: str, name: str) -> dict:
             return calendar_sync.import_file(session, content.encode(), name).model_dump(mode="json")
         except ValueError as exc:
             return _error(exc)
+
+
+# ---------------------------------------------------------------------------
+# Courses, categories and the combined to-do list
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+def get_work_plan(day: Optional[str] = None) -> dict:
+    """Everything to do around a day (default today), tasks and imported
+    assignments together: overdue (tasks due earlier, assignments from the
+    last 14 days not checked off), today (due or planned, done ones
+    included), and undated (open tasks with no due date, most important
+    first; undated_total says how many exist). Each item has kind
+    ('task'/'assignment'), done, due_at and its course if any. Complete a
+    task with complete_task, an assignment with set_deadline_completed."""
+    try:
+        parsed = _parse_day(day, "day")
+    except ValueError as exc:
+        return _error(exc)
+    with _session() as session:
+        return planning_service.work_plan(session, parsed).model_dump(mode="json")
+
+
+@mcp.tool()
+def list_courses(include_archived: bool = False) -> dict:
+    """The user's classes (e.g. CS 3214), with aliases, linked Canvas
+    course contexts and how many events/assignments belong to each. Use the
+    id with map_event_to_course."""
+    with _session() as session:
+        items = [courses_service.read(session, c).model_dump(mode="json")
+                 for c in courses_service.list_courses(session, include_archived)]
+        return {"courses": items, "count": len(items)}
+
+
+@mcp.tool()
+def create_course(code: str, name: Optional[str] = None, color: Optional[str] = None,
+                  style: Optional[str] = None, aliases: Optional[List[str]] = None) -> dict:
+    """Add a class, e.g. code='CS 3214', name='Computer Systems'. color:
+    red, orange, amber, yellow, lime, green, teal, cyan, sky, blue, indigo, violet, pink or slate (default: one no other course uses). style: solid, soft, outline, striped or glass. aliases are
+    other spellings to match ('CS3214'). Existing events titled like
+    'CS 3214 lecture' are linked automatically. Canvas courses are usually
+    created on their own when the feed syncs."""
+    try:
+        payload = CourseCreate(code=code, name=name, color=color, style=style, aliases=aliases or [])
+    except ValidationError as exc:
+        return _error(exc)
+    with _session() as session:
+        try:
+            return courses_service.read(session, courses_service.create_course(session, payload)).model_dump(mode="json")
+        except ValueError as exc:
+            return _error(exc)
+
+
+@mcp.tool()
+def update_course(course_id: str, code: Optional[str] = None, name: Optional[str] = None,
+                  color: Optional[str] = None, style: Optional[str] = None,
+                  aliases: Optional[List[str]] = None, archived: Optional[bool] = None) -> dict:
+    """Rename or restyle a class (color: red, orange, amber, yellow, lime, green, teal, cyan, sky, blue, indigo, violet, pink or slate; style: solid, soft, outline, striped or glass), replace its aliases, or archive it
+    (archived classes stop matching; their items show no course)."""
+    raw = {"code": code, "name": name, "color": color, "style": style, "aliases": aliases, "archived": archived}
+    try:
+        payload = CourseUpdate.model_validate({k: v for k, v in raw.items() if v is not None})
+    except ValidationError as exc:
+        return _error(exc)
+    with _session() as session:
+        course = courses_service.get_course(session, course_id)
+        if course is None:
+            return {"error": f"No course with id '{course_id}'"}
+        try:
+            return courses_service.read(session, courses_service.update_course(session, course, payload)).model_dump(mode="json")
+        except ValueError as exc:
+            return _error(exc)
+
+
+@mcp.tool()
+def map_event_to_course(event_id: str, course_id: Optional[str] = None) -> dict:
+    """Set which class an event or assignment belongs to (course_id=null:
+    none). Never changes anything else about the event. For a Canvas item
+    it's remembered for that whole Canvas course, so its other and future
+    assignments map the same way."""
+    with _session() as session:
+        event = events_service.get_event(session, event_id)
+        if event is None:
+            return _event_not_found(event_id)
+        course = None
+        if course_id:
+            course = courses_service.get_course(session, course_id)
+            if course is None:
+                return {"error": f"No course with id '{course_id}'"}
+        event = courses_service.set_event_course(session, event, course)
+        return EventRead.model_validate(event).model_dump(mode="json")
+
+
+@mcp.tool()
+def list_categories(include_archived: bool = False) -> dict:
+    """Categories for tasks and events (Personal, School, Research…), each
+    with key (what a task/event's category field holds), name, color and
+    style."""
+    with _session() as session:
+        items = [CategoryRead.model_validate(c).model_dump(mode="json")
+                 for c in categories_service.list_categories(session, include_archived)]
+        return {"categories": items, "count": len(items)}
+
+
+@mcp.tool()
+def create_category(name: str, color: Optional[str] = None, style: Optional[str] = None) -> dict:
+    """Add a category, e.g. 'VT Hacks' or 'Recruiting'. color: red, orange, amber, yellow, lime, green, teal, cyan, sky, blue, indigo, violet, pink or slate.
+    style: solid, soft, outline, striped or glass. Tasks and events then use its name as their
+    category."""
+    try:
+        payload = CategoryCreate(name=name, color=color, style=style)
+    except ValidationError as exc:
+        return _error(exc)
+    with _session() as session:
+        try:
+            return CategoryRead.model_validate(categories_service.create_category(session, payload)).model_dump(mode="json")
+        except ValueError as exc:
+            return _error(exc)
+
+
+@mcp.tool()
+def update_category(category_key: str, name: Optional[str] = None, color: Optional[str] = None,
+                    style: Optional[str] = None, archived: Optional[bool] = None) -> dict:
+    """Rename, recolor, restyle or archive a category, by its key (from
+    list_categories). Items keep it; only its display changes."""
+    raw = {"name": name, "color": color, "style": style, "archived": archived}
+    try:
+        payload = CategoryUpdate.model_validate({k: v for k, v in raw.items() if v is not None})
+    except ValidationError as exc:
+        return _error(exc)
+    with _session() as session:
+        category = categories_service.get_by_key(session, category_key)
+        if category is None:
+            return {"error": f"No category '{category_key}'. Use list_categories."}
+        return CategoryRead.model_validate(categories_service.update_category(session, category, payload)).model_dump(mode="json")
 
 
 @mcp.resource("tasks://today")

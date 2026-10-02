@@ -1,23 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import {
-  CalendarBlankIcon,
-  CalendarCheckIcon,
-  CalendarDotsIcon,
-  CaretRightIcon,
-  CodeIcon,
-  FireIcon,
-  ListChecksIcon,
-  SunIcon,
-  WarningCircleIcon,
-} from "@phosphor-icons/react";
+import { CalendarBlankIcon, CalendarCheckIcon, CaretRightIcon, CodeIcon, FireIcon, ListChecksIcon } from "@phosphor-icons/react";
 import { api } from "@/lib/api";
 import { notifyTasksChanged, onEventsChanged, onTasksChanged } from "@/lib/events";
-import { formatDateLong, todayIso } from "@/lib/format";
-import { isTaskDone, type LeetCodeStats, type Occurrence, type Task, type TodayView } from "@/lib/types";
-import { EmptyState, ErrorState, Page, PageHeader, Panel, TaskListSkeleton, TaskSection } from "@/components/PageParts";
+import { formatDateLong } from "@/lib/format";
+import type { LeetCodeStats, Occurrence, WorkPlan } from "@/lib/types";
+import { useNow } from "@/lib/useNow";
+import { EmptyState, ErrorState, Page, PageHeader, Panel, TaskListSkeleton } from "@/components/PageParts";
+import WorkList from "@/components/WorkList";
 import AgendaList from "@/components/events/AgendaList";
 import EventEditor, { type EditorTarget } from "@/components/events/EventEditor";
 
@@ -30,11 +22,11 @@ function greeting(): string {
 }
 
 export default function TodayPage() {
-  const [view, setView] = useState<TodayView | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [plan, setPlan] = useState<WorkPlan | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [schedule, setSchedule] = useState<Occurrence[]>([]);
+  const [schedule, setSchedule] = useState<Occurrence[] | null>(null);
   const [editor, setEditor] = useState<EditorTarget | null>(null);
+  const now = useNow();
 
   // LeetCode at a glance; shown only once something has been logged.
   const [leetcode, setLeetcode] = useState<LeetCodeStats | null>(null);
@@ -45,84 +37,65 @@ export default function TodayPage() {
       .catch(() => {});
   }, []);
 
+  // Tasks and imported assignments, as one list. "Today" is the server's
+  // (APP_TIMEZONE), so the schedule below uses the plan's date.
+  const loadPlan = useCallback(() => {
+    api
+      .getWorkPlan()
+      .then((p) => {
+        setPlan(p);
+        setError(null);
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load today"));
+  }, []);
   useEffect(() => {
-    function loadSchedule() {
-      const day = todayIso();
+    loadPlan();
+    const offTasks = onTasksChanged(loadPlan);
+    const offEvents = onEventsChanged(loadPlan);
+    return () => {
+      offTasks();
+      offEvents();
+    };
+  }, [loadPlan]);
+
+  const day = plan?.date;
+  useEffect(() => {
+    if (!day) return;
+    const load = () =>
       api
         .getSchedule(day, day)
         .then((s) => setSchedule(s.occurrences))
         .catch(() => {});
-    }
-    loadSchedule();
-    return onEventsChanged(loadSchedule);
-  }, []);
-
-  useEffect(() => {
-    function load() {
-      api
-        .getToday()
-        .then((v) => {
-          setView(v);
-          setError(null);
-        })
-        .catch((e) => setError(e instanceof Error ? e.message : "Failed to load today"))
-        .finally(() => setLoading(false));
-    }
     load();
-    return onTasksChanged(load);
-  }, []);
+    return onEventsChanged(load);
+  }, [day]);
 
-  function patch(section: keyof TodayView, updater: (tasks: Task[]) => Task[]) {
-    setView((prev) => (prev ? { ...prev, [section]: updater(prev[section] as Task[]) } : prev));
-  }
-
-  function onUpdatedIn(section: keyof TodayView) {
-    return (updated: Task) => patch(section, (tasks) => tasks.map((t) => (t.id === updated.id ? updated : t)));
-  }
-  function onDeletedIn(section: keyof TodayView) {
-    return (id: string) => patch(section, (tasks) => tasks.filter((t) => t.id !== id));
-  }
-
-  if (loading && !view) {
+  if (!plan) {
     return (
       <Page>
-        <PageHeader title="Today" subtitle={<span className="shimmer inline-block h-4 w-44 rounded" />} />
-        <TaskListSkeleton />
-      </Page>
-    );
-  }
-  if (!view) {
-    return (
-      <Page>
-        <PageHeader title="Today" />
-        <ErrorState message={error ?? "Couldn't load today."} onRetry={notifyTasksChanged} />
+        <PageHeader title="Today" subtitle={error ? undefined : <span className="shimmer inline-block h-4 w-44 rounded" />} />
+        {error ? <ErrorState message={error} onRetry={notifyTasksChanged} /> : <TaskListSkeleton />}
       </Page>
     );
   }
 
-  const dueToday = view.due_today.filter((t) => !view.scheduled.some((s) => s.id === t.id));
-  // Imported deadlines (Canvas assignments) due today are things to do, so
-  // they sit with the tasks (checkable) rather than in the schedule. They
-  // stay events; nothing is copied into tasks.
-  const deadlines = schedule.filter((o) => o.deadline && !o.cancelled);
-  const events = schedule.filter((o) => !(o.deadline && !o.cancelled));
-  const taskCount =
-    view.overdue.length + view.scheduled.length + dueToday.length + view.suggested_high_priority.length + deadlines.length;
-
-  const committed = [...view.scheduled, ...dueToday];
-  const doneCount = committed.filter(isTaskDone).length;
-  const pct = committed.length ? Math.round((doneCount / committed.length) * 100) : 0;
+  // Assignments are listed with the work; the schedule is everything else.
+  const events = (schedule ?? []).filter((o) => !(o.deadline && !o.cancelled));
+  const todayDone = plan.today.filter((i) => i.done).length;
+  const pct = plan.today.length ? Math.round((todayDone / plan.today.length) * 100) : 0;
+  const nothing = plan.overdue.length + plan.today.length + plan.undated.length === 0;
+  const isToday = now.slice(0, 10) === plan.date;
 
   return (
     <Page>
       <PageHeader
         title={greeting()}
-        subtitle={formatDateLong(view.date)}
+        subtitle={formatDateLong(plan.date)}
         actions={
-          committed.length > 0 ? (
-            <div className="flex items-center gap-3" aria-label={`${doneCount} of ${committed.length} done today`}>
+          plan.today.length > 0 ? (
+            <div className="flex items-center gap-3" aria-label={`${todayDone} of ${plan.today.length} due today done`}>
               <span className="font-mono text-xs tabular-nums text-fg-muted">
-                {doneCount}/{committed.length}
+                {todayDone}/{plan.today.length}
               </span>
               <span className="relative h-1.5 w-24 overflow-hidden rounded-full bg-surface-2">
                 <span
@@ -136,63 +109,14 @@ export default function TodayPage() {
       />
 
       <div className="grid gap-4 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        <Panel title="Tasks" icon={ListChecksIcon} count={taskCount}>
-          {taskCount === 0 ? (
-            <EmptyState variant="panel" icon={CalendarCheckIcon} title="Nothing planned or due">
-              Plan a task for today from All Tasks with the sun button, or add one from the Dashboard.
+        {/* Counts tasks and assignments, so it isn't called "tasks". */}
+        <Panel title="Things to do" icon={ListChecksIcon} count={plan.remaining}>
+          {nothing ? (
+            <EmptyState variant="panel" icon={CalendarCheckIcon} title="Nothing to do">
+              Nothing overdue, due today or waiting without a date. Add a task from the Dashboard.
             </EmptyState>
           ) : (
-            <>
-              <TaskSection
-                bare
-                title="Overdue"
-                icon={WarningCircleIcon}
-                iconClassName="text-danger"
-                tone="danger"
-                tasks={view.overdue}
-                onUpdated={onUpdatedIn("overdue")}
-                onDeleted={onDeletedIn("overdue")}
-              />
-              <TaskSection
-                bare
-                title="Planned for today"
-                icon={SunIcon}
-                iconClassName="text-warn"
-                tasks={view.scheduled}
-                onUpdated={onUpdatedIn("scheduled")}
-                onDeleted={onDeletedIn("scheduled")}
-              />
-              <TaskSection
-                bare
-                title="Due today"
-                icon={CalendarCheckIcon}
-                iconClassName="text-accent"
-                tasks={dueToday}
-                onUpdated={onUpdatedIn("due_today")}
-                onDeleted={onDeletedIn("due_today")}
-              />
-              {deadlines.length > 0 && (
-                <section className="anim-fade-up">
-                  <h3 className="flex items-center gap-2 px-3 pb-1 pt-2.5 text-xs font-medium text-fg-muted">
-                    <CalendarDotsIcon weight="bold" className="h-3.5 w-3.5 text-accent" aria-hidden />
-                    Assignments due today
-                    <span className="font-mono font-normal tabular-nums text-fg-faint">
-                      {deadlines.filter((o) => o.completed).length}/{deadlines.length}
-                    </span>
-                  </h3>
-                  <AgendaList occurrences={deadlines} onOpen={(occ) => setEditor({ kind: "occurrence", occ })} bare />
-                </section>
-              )}
-              <TaskSection
-                bare
-                title="High priority, unscheduled"
-                icon={FireIcon}
-                iconClassName="text-fg-faint"
-                tasks={view.suggested_high_priority}
-                onUpdated={onUpdatedIn("suggested_high_priority")}
-                onDeleted={onDeletedIn("suggested_high_priority")}
-              />
-            </>
+            <WorkList plan={plan} onChanged={loadPlan} onOpenAssignment={(occ) => setEditor({ kind: "occurrence", occ })} />
           )}
         </Panel>
 
@@ -208,10 +132,18 @@ export default function TodayPage() {
               </Link>
             }
           >
-            {events.length === 0 ? (
+            {schedule === null ? (
+              <TaskListSkeleton rows={2} className="" />
+            ) : events.length === 0 ? (
               <EmptyState variant="panel" icon={CalendarBlankIcon} title="Nothing scheduled today" />
             ) : (
-              <AgendaList occurrences={events} onOpen={(occ) => setEditor({ kind: "occurrence", occ })} bare />
+              <AgendaList
+                occurrences={events}
+                onOpen={(occ) => setEditor({ kind: "occurrence", occ })}
+                bare
+                now={isToday ? now : undefined}
+                scrollToNow
+              />
             )}
           </Panel>
 

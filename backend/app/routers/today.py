@@ -6,7 +6,8 @@ from sqlmodel import Session
 
 from app.deps import get_db, require_auth
 from app.models.enums import TaskPriority
-from app.schemas import TaskListResponse, TodayView, WeekSummary
+from app.schemas import TaskListResponse, TodayView, WeekSummary, WorkPlan
+from app.services import planning as planning_service
 from app.services import tasks as tasks_service
 from app.utils import local_today
 
@@ -29,6 +30,13 @@ def get_today(session: Session = Depends(get_db)):
             tasks_service.serialize_task(t, today) for t in bundle["suggested_high_priority"]
         ],
     )
+
+
+@router.get("/today/work", response_model=WorkPlan)
+def get_work(day: Optional[date] = Query(default=None, alias="date"), session: Session = Depends(get_db)):
+    """Tasks and imported assignments to do: overdue, today, and open tasks
+    with no due date (top few by priority)."""
+    return planning_service.work_plan(session, day)
 
 
 @router.get("/overdue", response_model=TaskListResponse)

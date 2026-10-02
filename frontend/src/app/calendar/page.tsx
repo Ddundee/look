@@ -1,11 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CalendarBlankIcon, CaretLeftIcon, CaretRightIcon, CheckIcon, PlusIcon } from "@phosphor-icons/react";
+import { CalendarBlankIcon, CaretLeftIcon, CaretRightIcon, CheckIcon, GraduationCapIcon, PlusIcon } from "@phosphor-icons/react";
 import { api } from "@/lib/api";
-import { compactTime, eventHue } from "@/lib/calendarEvents";
+import { compactTime } from "@/lib/calendarEvents";
+import { lookVars, titleWithoutCourse } from "@/lib/palette";
+import { useNow } from "@/lib/useNow";
+import { useLook } from "@/components/look/Look";
 import { onEventsChanged, onTasksChanged } from "@/lib/events";
-import { addDaysIso, categoryHue, formatDateLong, todayIso } from "@/lib/format";
+import { addDaysIso, formatDateLong, todayIso } from "@/lib/format";
 import { isTaskDone, type Occurrence, type Task } from "@/lib/types";
 import { BUTTON_PRIMARY, BUTTON_SECONDARY, CARD, ICON_BUTTON } from "@/lib/ui";
 
@@ -33,6 +36,40 @@ function coveredDays(o: Occurrence): string[] {
   const out: string[] = [];
   for (let d = first; d <= last && out.length < 62; d = addDaysIso(d, 1)) out.push(d);
   return out.length ? out : [first];
+}
+
+/** An event in a month cell: tinted in its course/category look; school
+ * items also get a cap icon, so color is never the only signal. */
+function MonthEventChip({ occ: o }: { occ: Occurrence }) {
+  const look = useLook(o);
+  return (
+    <span
+      className="look-fill flex items-center gap-1 truncate rounded px-1 py-px text-[11px] leading-4 text-fg"
+      data-style={look.style}
+      style={lookVars(look)}
+    >
+      {look.kind === "course" && <GraduationCapIcon weight="fill" className="look-ink h-3 w-3 shrink-0" aria-label={look.label} />}
+      {!o.all_day && <span className="shrink-0 font-mono text-fg-muted">{compactTime(o.start_at)}</span>}
+      <span className={`truncate ${o.completed ? "text-fg-faint line-through" : ""}`}>{titleWithoutCourse(o.title, o.course)}</span>
+    </span>
+  );
+}
+
+function MonthTaskChip({ task: t }: { task: Task }) {
+  const look = useLook({ category: t.category });
+  return (
+    <span
+      className={`flex items-center gap-1 truncate rounded px-1 py-px text-[11px] leading-4 ${
+        isTaskDone(t) ? "text-fg-faint line-through" : "text-fg-muted"
+      }`}
+      style={lookVars(look)}
+    >
+      <span className="look-ink shrink-0 font-semibold" aria-hidden>
+        #
+      </span>
+      <span className="truncate">{t.title}</span>
+    </span>
+  );
 }
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -137,6 +174,7 @@ export default function CalendarPage() {
     year: "numeric",
   });
   const today = todayIso();
+  const now = useNow();
   const viewingCurrentMonth = today.startsWith(`${cursor.year}-${pad(cursor.month + 1)}`);
 
   function goTo(year: number, month: number) {
@@ -255,24 +293,10 @@ export default function CalendarPage() {
                   {/* Larger screens: events (with times) then tasks. */}
                   <span className="hidden space-y-0.5 sm:block">
                     {shownEvents.map((o) => (
-                      <span key={`${o.event_id}-${o.occurrence_date}`} className="flex items-center gap-1 truncate rounded bg-surface-2 px-1 py-px text-[11px] leading-4 text-fg">
-                        <span className={`h-3 w-0.5 shrink-0 rounded-full bg-current ${eventHue(o.category)}`} aria-hidden />
-                        {!o.all_day && <span className="shrink-0 font-mono text-fg-muted">{compactTime(o.start_at)}</span>}
-                        <span className={`truncate ${o.completed ? "text-fg-faint line-through" : ""}`}>{o.title}</span>
-                      </span>
+                      <MonthEventChip key={`${o.event_id}-${o.occurrence_date}`} occ={o} />
                     ))}
                     {shownTasks.map((t) => (
-                      <span
-                        key={t.id}
-                        className={`flex items-center gap-1 truncate rounded px-1 py-px text-[11px] leading-4 ${
-                          isTaskDone(t) ? "text-fg-faint line-through" : "text-fg-muted"
-                        }`}
-                      >
-                        <span className={`shrink-0 font-semibold ${categoryHue(t.category)}`} aria-hidden>
-                          #
-                        </span>
-                        <span className="truncate">{t.title}</span>
-                      </span>
+                      <MonthTaskChip key={t.id} task={t} />
                     ))}
                     {hidden > 0 && <span className="block px-1 text-[11px] text-fg-faint">+{hidden} more</span>}
                   </span>
@@ -285,7 +309,13 @@ export default function CalendarPage() {
         <Panel title={formatDateLong(selected)} icon={CalendarBlankIcon} iconClassName="text-fg-faint" bodyClassName="p-1" className="lg:min-h-0">
           <div aria-live="polite" className="lg:h-full">
             {dayEvents.length > 0 && (
-              <AgendaList occurrences={dayEvents} onOpen={(occ) => setEditor({ kind: "occurrence", occ })} bare />
+              <AgendaList
+                occurrences={dayEvents}
+                onOpen={(occ) => setEditor({ kind: "occurrence", occ })}
+                bare
+                now={now && selected === now.slice(0, 10) ? now : undefined}
+                scrollToNow
+              />
             )}
             {dayTasks.length > 0 && (
               <div className={dayEvents.length > 0 ? "mt-1 border-t border-line pt-1" : ""}>

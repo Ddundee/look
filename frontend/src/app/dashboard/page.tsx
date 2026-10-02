@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -14,20 +14,23 @@ import {
   type Icon,
 } from "@phosphor-icons/react";
 import { api } from "@/lib/api";
-import { compactTime, eventHue, timeLabel } from "@/lib/calendarEvents";
+import { compactTime, timeLabel } from "@/lib/calendarEvents";
 import { notifyTasksChanged, onEventsChanged, onTasksChanged } from "@/lib/events";
 import { addDaysIso, formatDateLong, todayIso } from "@/lib/format";
 import { weekRangeIso } from "@/lib/week";
 import { fmtGrams, fmtKcal, MACRO_LABEL, MACROS } from "@/lib/nutrition";
-import { isTaskDone, type DaySummary, type MacroKey, type Occurrence, type Task } from "@/lib/types";
+import { nowPlacement } from "@/lib/now";
+import { titleWithoutCourse } from "@/lib/palette";
+import type { DaySummary, MacroKey, Occurrence } from "@/lib/types";
+import { useNow } from "@/lib/useNow";
 import QuickAddBar from "@/components/QuickAddBar";
-import TaskRow from "@/components/TaskRow";
+import WorkList from "@/components/WorkList";
+import { NowLine, useScrollToNow } from "@/components/events/AgendaList";
+import { CourseBadge, ItemEdge, useLook } from "@/components/look/Look";
 import EventEditor, { type EditorTarget } from "@/components/events/EventEditor";
 import TargetsModal from "@/components/nutrition/TargetsModal";
 import WeekChart from "@/components/nutrition/WeekChart";
 
-const MAX_EVENTS = 5;
-const MAX_DUE = 5;
 const MAX_DAY_EVENTS = 3;
 
 /** Loads one tile's data independently, so a failing endpoint only
@@ -131,15 +134,6 @@ function Quiet({ children }: { children: React.ReactNode }) {
   return <p className="flex h-full items-center justify-center text-center text-sm text-fg-faint">{children}</p>;
 }
 
-function More({ count, href, label }: { count: number; href: string; label: string }) {
-  if (count <= 0) return null;
-  return (
-    <Link href={href} className="mt-1 block px-1 text-xs font-medium text-accent-text underline-offset-4 hover:underline">
-      +{count} more {label}
-    </Link>
-  );
-}
-
 function Bar({ value, goal, over, thick }: { value: number; goal: number; over: boolean; thick?: boolean }) {
   const pct = goal > 0 ? Math.min(100, (value / goal) * 100) : 0;
   return (
@@ -207,31 +201,64 @@ function CaloriesBody({ summary, onSetTargets }: { summary: DaySummary; onSetTar
   );
 }
 
-function ScheduleRow({ occ, onOpen }: { occ: Occurrence; onOpen: () => void }) {
+function DayChipEdge({ occ }: { occ: Occurrence }) {
+  return <ItemEdge look={useLook(occ)} />;
+}
+
+function ScheduleRow({ occ, onOpen, active }: { occ: Occurrence; onOpen: () => void; active: boolean }) {
+  const look = useLook(occ);
   return (
-    <li>
+    <li data-active-now={active || undefined}>
       <button
         type="button"
         onClick={onOpen}
-        className="flex w-full items-start gap-3 rounded-lg px-2 py-2 text-left transition-colors duration-150 hover:bg-surface-2/70"
+        className={`flex w-full items-start gap-3 rounded-lg px-2 py-2 text-left transition-colors duration-150 hover:bg-surface-2/70 ${
+          active ? "bg-accent-soft/60" : ""
+        }`}
       >
         <span className="w-16 shrink-0 font-mono text-xs leading-5 tabular-nums text-fg-muted">
           {occ.all_day ? "All day" : timeLabel(occ.start_at)}
         </span>
-        <span className={`mt-0.5 w-0.5 shrink-0 self-stretch rounded-full bg-current ${eventHue(occ.category)}`} aria-hidden />
+        <ItemEdge look={look} className="mt-0.5" />
         <span className="min-w-0 flex-1">
           <span className={`block truncate text-sm leading-5 ${occ.completed ? "text-fg-faint line-through" : "text-fg"}`}>
-            {occ.title}
+            {titleWithoutCourse(occ.title, occ.course)}
           </span>
-          {occ.location && (
-            <span className="mt-0.5 flex items-center gap-1 truncate text-xs text-fg-muted">
-              <MapPinIcon className="h-3.5 w-3.5 shrink-0" aria-hidden />
-              {occ.location}
+          {(occ.course || occ.location || active) && (
+            <span className="mt-0.5 flex items-center gap-2 truncate text-xs text-fg-muted">
+              {active && <span className="rounded-md bg-accent px-1.5 py-px text-[11px] font-medium text-accent-fg">Now</span>}
+              {occ.course && <CourseBadge course={occ.course} />}
+              {occ.location && (
+                <span className="inline-flex min-w-0 items-center gap-1 truncate">
+                  <MapPinIcon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  {occ.location}
+                </span>
+              )}
             </span>
           )}
         </span>
       </button>
     </li>
+  );
+}
+
+/** Today's events, compact, with the Now line; scrolls to now once. */
+function TodaySchedule({ events, now, onOpen }: { events: Occurrence[]; now: string; onOpen: (o: Occurrence) => void }) {
+  const listRef = useRef<HTMLUListElement>(null);
+  const placement = now ? nowPlacement(events, now) : null;
+  useScrollToNow(listRef, !!now, events.length);
+  return (
+    <div className="scroll-area -mx-2 h-full overflow-y-auto">
+      <ul ref={listRef} className="space-y-0.5">
+        {events.map((o, i) => (
+          <Fragment key={`${o.event_id}-${o.occurrence_date}`}>
+            {placement?.before === i && <NowLine now={now} />}
+            <ScheduleRow occ={o} onOpen={() => onOpen(o)} active={placement?.active.has(i) ?? false} />
+          </Fragment>
+        ))}
+        {placement?.before === events.length && <NowLine now={now} />}
+      </ul>
+    </div>
   );
 }
 
@@ -253,7 +280,8 @@ export default function DashboardPage() {
 
   const today = todayIso();
   const weekEnd = addDaysIso(today, 6);
-  const todayView = useCard(() => api.getToday(), version);
+  const work = useCard(() => api.getWorkPlan(), version);
+  const now = useNow();
   const upcoming = useCard(() => api.getSchedule(today, weekEnd).then((s) => s.occurrences), version);
   const dueSoon = useCard(
     () => api.listTasks({ due_after: today, due_before: weekEnd, include_completed: false }).then((r) => r.tasks),
@@ -267,30 +295,20 @@ export default function DashboardPage() {
   const refresh = () => setVersion((v) => v + 1);
 
   const todayEvents = (upcoming.data ?? []).filter((o) => o.start_at.slice(0, 10) <= today && o.end_at.slice(0, 10) >= today);
+  // Assignments are listed under Things to do; the schedule is the rest.
+  const todaySchedule = todayEvents.filter((o) => !(o.deadline && !o.cancelled));
   const eventsNextWeek = upcoming.data?.length ?? null;
-
-  const due: Task[] = (() => {
-    if (!todayView.data) return [];
-    const seen = new Set<string>();
-    const out: Task[] = [];
-    for (const t of [...todayView.data.overdue, ...todayView.data.due_today]) {
-      if (seen.has(t.id) || isTaskDone(t)) continue;
-      seen.add(t.id);
-      out.push(t);
-    }
-    return out;
-  })();
 
   const summary: string[] = [];
   if (upcoming.data) summary.push(plural(todayEvents.length, "event"));
-  if (todayView.data) summary.push(`${due.length} due`);
+  if (work.data) summary.push(`${work.data.remaining} to do`);
   if (nutrition.data?.remaining) {
     const left = nutrition.data.remaining.calories;
     summary.push(left >= 0 ? `${fmtKcal(left)} kcal left` : `${fmtKcal(-left)} kcal over`);
   }
   // The greeting uses the client clock, so it renders only once data has
   // arrived on the client; server and client markup stay identical.
-  const headerDate = todayView.data?.date ?? null;
+  const headerDate = work.data?.date ?? null;
 
   const days = Array.from({ length: 7 }, (_, i) => addDaysIso(today, i));
 
@@ -376,41 +394,35 @@ export default function DashboardPage() {
           <TileError message={upcoming.error} onRetry={upcoming.retry} />
         ) : !upcoming.data ? (
           <TileSkeleton />
-        ) : todayEvents.length === 0 ? (
+        ) : todaySchedule.length === 0 ? (
           <Quiet>Nothing scheduled today.</Quiet>
         ) : (
-          <>
-            <ul className="-mx-2 space-y-0.5">
-              {todayEvents.slice(0, MAX_EVENTS).map((o) => (
-                <ScheduleRow
-                  key={`${o.event_id}-${o.occurrence_date}`}
-                  occ={o}
-                  onOpen={() => setEditor({ kind: "occurrence", occ: o })}
-                />
-              ))}
-            </ul>
-            <More count={todayEvents.length - MAX_EVENTS} href="/calendar" label="on the calendar" />
-          </>
+          <TodaySchedule
+            events={todaySchedule}
+            now={headerDate && now.slice(0, 10) === headerDate ? now : ""}
+            onOpen={(o) => setEditor({ kind: "occurrence", occ: o })}
+          />
         )}
       </Tile>
 
-      {/* Due and overdue */}
-      <Tile title="Due and overdue" icon={ListChecksIcon} href="/today" link="Today" className="order-2 md:order-none md:col-span-3 md:row-span-4">
-        {todayView.error && !todayView.data ? (
-          <TileError message={todayView.error} onRetry={todayView.retry} />
-        ) : !todayView.data ? (
+      {/* Things to do: tasks and imported assignments */}
+      <Tile
+        title={work.data ? `Things to do · ${work.data.remaining}` : "Things to do"}
+        icon={ListChecksIcon}
+        href="/today"
+        link="Today"
+        className="order-2 md:order-none md:col-span-3 md:row-span-4"
+      >
+        {work.error && !work.data ? (
+          <TileError message={work.error} onRetry={work.retry} />
+        ) : !work.data ? (
           <TileSkeleton />
-        ) : due.length === 0 ? (
-          <Quiet>Nothing due. Nice.</Quiet>
+        ) : work.data.overdue.length + work.data.today.length + work.data.undated.length === 0 ? (
+          <Quiet>Nothing to do. Nice.</Quiet>
         ) : (
-          <>
-            <ul className="-mx-3">
-              {due.slice(0, MAX_DUE).map((t, i) => (
-                <TaskRow key={t.id} task={t} index={i} onUpdated={refresh} onDeleted={refresh} />
-              ))}
-            </ul>
-            <More count={due.length - MAX_DUE} href="/today" label="on Today" />
-          </>
+          <div className="scroll-area -mx-3 h-full overflow-y-auto">
+            <WorkList plan={work.data} onChanged={refresh} onOpenAssignment={(occ) => setEditor({ kind: "occurrence", occ })} />
+          </div>
         )}
       </Tile>
 
@@ -454,7 +466,7 @@ export default function DashboardPage() {
                         key={`${o.event_id}-${o.occurrence_date}`}
                         className="flex gap-1.5 rounded-md bg-surface/70 px-1.5 py-1 text-[11px] leading-4"
                       >
-                        <span className={`w-0.5 shrink-0 rounded-full bg-current ${eventHue(o.category)}`} aria-hidden />
+                        <DayChipEdge occ={o} />
                         <span className="min-w-0">
                           <span className="block font-mono text-fg-muted">{o.all_day ? "All day" : compactTime(o.start_at)}</span>
                           <span className="line-clamp-2 text-fg [overflow-wrap:anywhere]">{o.title}</span>

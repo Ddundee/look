@@ -57,6 +57,7 @@ from app.schemas import (
     CalendarSubscriptionUpdate,
     CalendarSyncResult,
 )
+from app.services import courses as courses_service
 from app.services import ics
 from app.utils import utcnow
 
@@ -267,6 +268,7 @@ def _apply(event: Event, parsed: ics.ParsedEvent, now: datetime) -> None:
     event.external_url = parsed.url
     event.external_status = parsed.status
     event.is_deadline = parsed.deadline
+    event.external_context = parsed.external_context
     event.external_hash = parsed.content_hash()
     event.last_synced_at = now
     event.updated_at = now
@@ -334,6 +336,7 @@ def reconcile(session: Session, sub: CalendarSubscription, parsed: List[ics.Pars
             event = Event(subscription_id=sub.id, external_uid=item.uid, source=SOURCE, category="other",
                           title=item.title, start_at=item.start_at, end_at=item.end_at)
             _apply(event, item, now)
+            courses_service.apply(session, event, create=True)
             _reconcile_completion(event, item, now)
             session.add(event)
             session.flush()  # the overrides reference it
@@ -341,12 +344,16 @@ def reconcile(session: Session, sub: CalendarSubscription, parsed: List[ics.Pars
             counts.created += 1
         elif event.external_hash != digest or event.external_status != item.status:
             _apply(event, item, now)
+            courses_service.apply(session, event, create=True)
             _reconcile_completion(event, item, now)
             session.add(event)
             _replace_overrides(session, event, item)
             counts.updated += 1
         else:
             event.last_synced_at = now
+            # Courses aren't feed content: re-checked every sync, so links
+            # learned since (or a new course) apply to existing items too.
+            courses_service.apply(session, event, create=True)
             changed = _reconcile_completion(event, item, now)
             session.add(event)
             if changed:

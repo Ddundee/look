@@ -7,6 +7,7 @@ import { addDaysIso, formatDateLong } from "@/lib/format";
 import type { Occurrence } from "@/lib/types";
 import { BUTTON_PRIMARY, BUTTON_SECONDARY, MUTED } from "@/lib/ui";
 import Dialog from "../Dialog";
+import CourseSelect from "../look/CourseSelect";
 import DeadlineCheckbox from "./DeadlineCheckbox";
 
 /** Details of an event that comes from a calendar subscription. The feed
@@ -91,6 +92,8 @@ export default function ImportedEventModal({ occ, onClose }: { occ: Occurrence; 
           {occ.notes}
         </p>
       )}
+
+      <CourseSelect eventId={occ.event_id} courseId={occ.course_id} imported />
 
       <p className="flex items-start gap-2 rounded-lg bg-surface-2 px-3 py-2 text-xs leading-relaxed text-fg-muted">
         <CalendarDotsIcon className="mt-0.5 h-4 w-4 shrink-0 text-accent" aria-hidden />

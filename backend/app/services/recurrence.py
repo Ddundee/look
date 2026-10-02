@@ -3,6 +3,7 @@ from typing import List
 
 from sqlmodel import Session, select
 
+from app.services import categories as categories_service
 from app.models.enums import RecurrencePattern, TaskStatus
 from app.models.task import RecurrenceRule, Task
 from app.schemas import RecurringTaskCreate
@@ -12,7 +13,7 @@ def create_recurring_task(session: Session, data: RecurringTaskCreate) -> Recurr
     rule = RecurrenceRule(
         title=data.title,
         description=data.description,
-        category=data.category,
+        category=categories_service.ensure(session, data.category).key,
         priority=data.priority,
         estimated_duration=data.estimated_duration,
         tags=data.tags,

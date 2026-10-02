@@ -30,9 +30,9 @@ def test_system_requires_auth(client):
 
 def test_version_reports_revision(client, auth_headers, monkeypatch):
     monkeypatch.setattr(get_settings(), "app_revision", "abc123")
-    assert client.get("/api/system/version", headers=auth_headers).json() == {"revision": "abc123"}
+    assert client.get("/api/system/version", headers=auth_headers).json() == {"revision": "abc123", "timezone": "UTC"}
     monkeypatch.setattr(get_settings(), "app_revision", "")
-    assert client.get("/api/system/version", headers=auth_headers).json() == {"revision": None}
+    assert client.get("/api/system/version", headers=auth_headers).json() == {"revision": None, "timezone": "UTC"}
 
 
 def test_update_disabled_without_url(client, auth_headers, monkeypatch):

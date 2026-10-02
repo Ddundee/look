@@ -54,6 +54,22 @@
   --warn: oklch(0.58 0.14 62);
   --warn-soft: oklch(0.7 0.15 70 / 0.13);
   --shadow-tint: 220 20% 20%;
+
+  /* Category/course palette (lib/palette.ts COLORS), read via --look. */
+  --c-red: oklch(0.6 0.16 25);
+  --c-orange: oklch(0.6 0.16 50);
+  --c-amber: oklch(0.6 0.16 75);
+  --c-yellow: oklch(0.6 0.16 95);
+  --c-lime: oklch(0.6 0.16 128);
+  --c-green: oklch(0.6 0.16 150);
+  --c-teal: oklch(0.6 0.16 182);
+  --c-cyan: oklch(0.6 0.16 205);
+  --c-sky: oklch(0.6 0.16 232);
+  --c-blue: oklch(0.6 0.16 258);
+  --c-indigo: oklch(0.6 0.16 278);
+  --c-violet: oklch(0.6 0.16 300);
+  --c-pink: oklch(0.6 0.16 350);
+  --c-slate: oklch(0.55 0.03 260);
 }
 
 :root.dark {
@@ -76,6 +92,21 @@
   --warn: oklch(0.8 0.13 75);
   --warn-soft: oklch(0.8 0.13 75 / 0.12);
   --shadow-tint: 0 0% 0%;
+
+  --c-red: oklch(0.72 0.14 25);
+  --c-orange: oklch(0.72 0.14 50);
+  --c-amber: oklch(0.72 0.14 75);
+  --c-yellow: oklch(0.72 0.14 95);
+  --c-lime: oklch(0.72 0.14 128);
+  --c-green: oklch(0.72 0.14 150);
+  --c-teal: oklch(0.72 0.14 182);
+  --c-cyan: oklch(0.72 0.14 205);
+  --c-sky: oklch(0.72 0.14 232);
+  --c-blue: oklch(0.72 0.14 258);
+  --c-indigo: oklch(0.72 0.14 278);
+  --c-violet: oklch(0.72 0.14 300);
+  --c-pink: oklch(0.72 0.14 350);
+  --c-slate: oklch(0.68 0.03 260);
 }
 
 @layer base {
@@ -111,6 +142,74 @@
   .dark input[type="time"]::-webkit-calendar-picker-indicator {
     filter: invert(1);
   }
+}
+
+/* Item looks: a course's or category's color (--look, set inline from a
+   palette key by lib/palette.ts) in one of five styles (data-style).
+   Subtle by design: text keeps the normal foreground color; the color sits
+   in an edge, a tint or a pattern next to a text label, never alone.
+   .look-edge: the thin marker beside an item in lists.
+   .look-fill: a tinted background (month-grid chips, badges, previews). */
+.look-edge {
+  width: 3px;
+  flex-shrink: 0;
+  align-self: stretch;
+  border-radius: 9999px;
+  background: var(--look);
+}
+.look-edge[data-style="soft"] {
+  background: color-mix(in oklch, var(--look) 55%, transparent);
+}
+.look-edge[data-style="outline"] {
+  width: 5px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--look);
+}
+.look-edge[data-style="striped"] {
+  width: 4px;
+  background: repeating-linear-gradient(180deg, var(--look) 0 3px, transparent 3px 5px);
+}
+.look-edge[data-style="glass"] {
+  width: 4px;
+  background: linear-gradient(180deg, color-mix(in oklch, var(--look) 75%, white), color-mix(in oklch, var(--look) 40%, transparent));
+  box-shadow: 0 0 0 1px color-mix(in oklch, var(--look) 30%, transparent);
+}
+
+.look-fill {
+  background: color-mix(in oklch, var(--look) 16%, var(--surface));
+}
+.look-fill[data-style="solid"] {
+  background: color-mix(in oklch, var(--look) 20%, var(--surface));
+  box-shadow: inset 2px 0 0 var(--look);
+}
+.look-fill[data-style="soft"] {
+  background: color-mix(in oklch, var(--look) 12%, var(--surface));
+}
+.look-fill[data-style="outline"] {
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--look) 70%, transparent);
+}
+.look-fill[data-style="striped"] {
+  background: repeating-linear-gradient(
+    135deg,
+    color-mix(in oklch, var(--look) 20%, var(--surface)) 0 5px,
+    color-mix(in oklch, var(--look) 7%, var(--surface)) 5px 10px
+  );
+}
+.look-fill[data-style="glass"] {
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklch, var(--look) 18%, transparent),
+    color-mix(in oklch, var(--look) 8%, transparent)
+  );
+  backdrop-filter: blur(6px);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklch, var(--look) 32%, transparent),
+    inset 0 1px 0 color-mix(in oklch, white 30%, transparent);
+}
+/* An icon or short label in the look's color, readable on surfaces. */
+.look-ink {
+  color: color-mix(in oklch, var(--look) 82%, var(--fg));
 }
 
 /* Thin, theme-aware scrollbars for the scrolling content pane. */
