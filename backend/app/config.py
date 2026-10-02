@@ -26,6 +26,13 @@ class Settings(BaseSettings):
     session_ttl_hours: int = 720
 
     app_timezone: str = "UTC"
+
+    # Background re-fetching of calendar subscriptions (ICS URLs). Each
+    # subscription has its own interval; this is how often to check which
+    # are due, and how long after startup the first pass runs.
+    calendar_sync_enabled: bool = True
+    calendar_sync_check_seconds: int = 60
+    calendar_sync_startup_delay_seconds: int = 15
     log_level: str = "INFO"
     seed_demo_data: bool = False
 

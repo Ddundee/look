@@ -8,7 +8,7 @@ It runs on my own hardware and can be used from the web or through MCP clients l
 
 - **Tasks** — create, edit, complete, prioritize, and schedule tasks
 - **Today** — see what is planned, due, or overdue in one place
-- **Calendar** — manage one-time and recurring events
+- **Calendar** — manage one-time and recurring events, and subscribe to ICS feeds like Canvas that stay in sync
 - **Nutrition** — log food and track daily calorie and macro targets
 - **LeetCode** — log attempts, track streaks, goals, difficulty, topics, and confidence
 - **MCP** — let compatible AI clients read and update the same data
@@ -130,6 +130,7 @@ The web app and MCP server use the same backend logic and PostgreSQL database, s
 - [Database and upgrades](docs/DATABASE.md)
 - [MCP setup](docs/MCP.md)
 - [LeetCode tracking](docs/LEETCODE.md)
+- [Calendar subscriptions (ICS)](docs/CALENDARS.md)
 - [Task model](docs/TASK_MODEL.md)
 - [Tailscale](docs/TAILSCALE.md)
 

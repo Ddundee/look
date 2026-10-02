@@ -18,6 +18,7 @@ class Event(SQLModel, table=True):
     never stored as rows."""
 
     __tablename__ = "events"
+    __table_args__ = (UniqueConstraint("subscription_id", "external_uid", name="uq_events_subscription_uid"),)
 
     id: str = Field(default_factory=_uuid, primary_key=True)
     title: str
@@ -36,6 +37,19 @@ class Event(SQLModel, table=True):
     source: str = Field(default="manual")
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
+
+    # Set only for events mirrored from a calendar subscription; manual
+    # events leave all of these empty. The feed owns such events (they're
+    # read-only in Look), identified by subscription + ICS UID.
+    subscription_id: Optional[str] = Field(default=None, foreign_key="calendar_subscriptions.id", index=True)
+    external_uid: Optional[str] = None
+    external_url: Optional[str] = None
+    # "cancelled" (STATUS:CANCELLED in the feed) or "removed" (no longer in
+    # the feed); null while it's live. Removed events are kept, not deleted.
+    external_status: Optional[str] = None
+    # Hash of the imported fields: same hash on the next sync = unchanged.
+    external_hash: Optional[str] = None
+    last_synced_at: Optional[datetime] = None
 
 
 class EventOverride(SQLModel, table=True):

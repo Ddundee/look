@@ -14,6 +14,7 @@ from dateutil.rrule import HOURLY, MINUTELY, SECONDLY, rrule as RRule, rrulestr
 from sqlalchemy import or_
 from sqlmodel import Session, col, select
 
+from app.models.calendars import CalendarSubscription
 from app.models.events import Event, EventOverride
 from app.schemas import (
     EventCreate,
@@ -121,7 +122,11 @@ def _occ(
         recurring=bool(event.rrule),
         rrule=event.rrule,
         overridden=override is not None,
-        cancelled=bool(override is not None and override.cancelled),
+        cancelled=bool(override is not None and override.cancelled) or event.external_status is not None,
+        read_only=event.subscription_id is not None,
+        subscription_id=event.subscription_id,
+        external_url=event.external_url,
+        external_status=event.external_status,
     )
 
 
@@ -172,6 +177,20 @@ def draft_event(payload: EventCreate, source: str = "manual") -> Event:
     )
 
 
+def ensure_editable(session: Session, event: Event) -> None:
+    """Imported events belong to their feed: a local edit would be
+    overwritten (or fight) the next sync, so they're read-only here."""
+    if event.subscription_id is None:
+        return
+    sub = session.get(CalendarSubscription, event.subscription_id)
+    name = sub.name if sub is not None else "a calendar subscription"
+    raise ValueError(
+        f"'{event.title}' comes from the calendar '{name}' and is read-only in Look; "
+        "change it in the source calendar (it syncs back), or remove the subscription "
+        "and keep its events to make them editable."
+    )
+
+
 def create_event(session: Session, payload: EventCreate, source: str = "manual") -> Event:
     event = draft_event(payload, source)
     session.add(event)
@@ -210,6 +229,7 @@ def update_event(session: Session, event: Event, changes: EventUpdate) -> Tuple[
     """Change a one-off event or a whole series. An empty string clears
     location, notes or rrule. Returns the event and the dates of any
     single-date overrides dropped because they no longer fit the series."""
+    ensure_editable(session, event)
     data = changes.model_dump(exclude_unset=True)
     for field_name in _NOT_CLEARABLE:
         if field_name in data and data[field_name] is None:
@@ -254,6 +274,7 @@ def _prune_overrides(session: Session, event: Event) -> List[date]:
 
 
 def delete_event(session: Session, event: Event) -> None:
+    ensure_editable(session, event)
     for ov in session.exec(select(EventOverride).where(EventOverride.event_id == event.id)).all():
         session.delete(ov)
     # Flush the overrides first so Postgres never sees them orphaned.
@@ -277,6 +298,7 @@ def _series_start(event: Event, day: date) -> datetime:
 
 
 def edit_occurrence(session: Session, event: Event, day: date, changes: OccurrenceEdit) -> Occurrence:
+    ensure_editable(session, event)
     start = _series_start(event, day)
     ov = _override_for(session, event, day) or EventOverride(event_id=event.id, original_date=day)
     if changes.cancel:
@@ -302,6 +324,7 @@ def edit_occurrence(session: Session, event: Event, day: date, changes: Occurren
 
 
 def restore_occurrence(session: Session, event: Event, day: date) -> Occurrence:
+    ensure_editable(session, event)
     start = _series_start(event, day)
     ov = _override_for(session, event, day)
     if ov is not None:
@@ -370,7 +393,22 @@ def occurrences(
                 add(_occ(event, occ_start, day, ov))
 
     out.sort(key=lambda o: (o.start_at, o.title))
+    _name_sources(session, out)
     return out
+
+
+def _name_sources(session: Session, occs: List[Occurrence]) -> None:
+    ids = {o.subscription_id for o in occs if o.subscription_id}
+    if not ids:
+        return
+    names = dict(
+        session.exec(
+            select(CalendarSubscription.id, CalendarSubscription.name).where(col(CalendarSubscription.id).in_(ids))
+        ).all()
+    )
+    for occ in occs:
+        if occ.subscription_id:
+            occ.subscription_name = names.get(occ.subscription_id)
 
 
 def preview(session: Session, event: Event, count: int = 5) -> List[Occurrence]:

@@ -1,7 +1,7 @@
 "use client";
 
-import { ArrowsClockwiseIcon, MapPinIcon } from "@phosphor-icons/react";
-import { eventHue, timeLabel } from "@/lib/calendarEvents";
+import { ArrowsClockwiseIcon, CalendarDotsIcon, MapPinIcon } from "@phosphor-icons/react";
+import { eventHue, isInstant, timeLabel } from "@/lib/calendarEvents";
 import type { Occurrence } from "@/lib/types";
 import { CARD_LIST } from "@/lib/ui";
 
@@ -28,7 +28,7 @@ export default function AgendaList({
               ) : (
                 <>
                   {timeLabel(o.start_at)}
-                  <span className="block text-fg-faint">{timeLabel(o.end_at)}</span>
+                  {!isInstant(o) && <span className="block text-fg-faint">{timeLabel(o.end_at)}</span>}
                 </>
               )}
             </span>
@@ -42,7 +42,14 @@ export default function AgendaList({
                 {o.title}
               </span>
               <span className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-fg-muted">
-                <span className="capitalize">{o.category}</span>
+                {o.subscription_name ? (
+                  <span className="inline-flex items-center gap-1" title={`From ${o.subscription_name} (read-only)`}>
+                    <CalendarDotsIcon className="h-3.5 w-3.5" aria-hidden />
+                    {o.subscription_name}
+                  </span>
+                ) : (
+                  <span className="capitalize">{o.category}</span>
+                )}
                 {o.location && (
                   <span className="inline-flex items-center gap-1">
                     <MapPinIcon className="h-3.5 w-3.5" aria-hidden />
@@ -55,7 +62,9 @@ export default function AgendaList({
                     <span className="sr-only">Repeats</span>
                   </span>
                 )}
-                {o.cancelled ? (
+                {o.external_status === "removed" ? (
+                  <span className="text-fg-faint">Removed from feed</span>
+                ) : o.cancelled ? (
                   <span className="font-medium text-danger">Cancelled</span>
                 ) : o.overridden ? (
                   <span className="text-fg-faint">Changed for this date</span>

@@ -193,7 +193,15 @@ export interface CalendarEvent {
   source: string;
   created_at: string;
   updated_at: string;
+  subscription_id: string | null;
+  external_url: string | null;
+  external_status: ExternalStatus;
+  last_synced_at: string | null;
 }
+
+/** For events from a calendar subscription: cancelled in the feed, or no
+ * longer in it. Both also set `cancelled` on occurrences. */
+export type ExternalStatus = "cancelled" | "removed" | null;
 
 export interface Occurrence {
   event_id: string;
@@ -209,6 +217,12 @@ export interface Occurrence {
   rrule: string | null;
   overridden: boolean;
   cancelled: boolean;
+  /** Imported from a calendar subscription; the feed owns it. */
+  read_only: boolean;
+  subscription_id: string | null;
+  subscription_name: string | null;
+  external_url: string | null;
+  external_status: ExternalStatus;
 }
 
 export interface EventWithContext {
@@ -366,4 +380,38 @@ export interface LeetCodeAttemptPayload {
   confidence?: number | null;
   notes?: string | null;
   attempted_at?: string | null;
+}
+
+// ---- Calendar subscriptions -------------------------------------------------
+
+export interface SyncCounts {
+  created: number;
+  updated: number;
+  unchanged: number;
+  removed: number;
+}
+
+export interface CalendarSubscription {
+  id: string;
+  name: string;
+  /** url: re-fetched on its interval. file: a one-time upload. */
+  source_type: "url" | "file";
+  source_url: string | null;
+  enabled: boolean;
+  sync_interval_minutes: number;
+  last_sync_at: string | null; // ISO with timezone
+  last_success_at: string | null;
+  last_error: string | null;
+  last_result: SyncCounts | null;
+  created_at: string;
+  updated_at: string;
+  event_count: number;
+  next_sync_at: string | null;
+}
+
+export interface CalendarSyncResult extends SyncCounts {
+  status: "ok" | "not_modified" | "error" | "skipped";
+  error: string | null;
+  warnings: string[];
+  subscription: CalendarSubscription | null;
 }

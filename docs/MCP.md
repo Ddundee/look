@@ -203,6 +203,23 @@ and topic weakness are calculated.
 | `get_leetcode_problem` | One problem by number, with every attempt |
 | `set_leetcode_goals` | Daily and weekly targets |
 
+### Calendar subscriptions
+
+ICS calendars (Canvas, school, sports, exported Google calendars). Giving
+the assistant a calendar URL creates a **live subscription** that Look
+re-fetches on its own; it never imports a URL just once. Imported events
+appear in `get_schedule` with `subscription_name` and are read-only. See
+[`CALENDARS.md`](CALENDARS.md).
+
+| Tool | Description |
+|---|---|
+| `add_calendar_subscription` | Subscribe to an ICS/webcal URL (name, url, sync_interval_minutes, default 30) and sync it once. Returns the counts |
+| `list_calendar_subscriptions` | All sources with interval, last sync, last error, event count |
+| `sync_calendar_subscription` | Re-fetch a URL subscription now |
+| `update_calendar_subscription` | Rename, pause/resume (enabled), change the interval |
+| `remove_calendar_subscription` | Remove one; keep_events=true keeps its events as normal events |
+| `import_ics` | One-time import of raw iCalendar text (a snapshot; prefer a URL subscription) |
+
 ## Resources (read-only)
 
 | URI | Contents |
@@ -228,3 +245,4 @@ and topic weakness are calculated.
 - "Which LeetCode topics am I weakest at?"
 - "Add CS 101, Mon/Wed/Fri 10 to 10:50 through Dec 12, skipping Thanksgiving week."
 - "No class this Friday."
+- "Add my Canvas calendar: https://canvas.example.edu/feeds/calendars/user_….ics"

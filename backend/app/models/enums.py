@@ -48,3 +48,8 @@ class LeetCodeDifficulty(str, Enum):
     easy = "easy"
     medium = "medium"
     hard = "hard"
+
+
+class CalendarSourceType(str, Enum):
+    url = "url"  # a subscription: re-fetched on its interval
+    file = "file"  # a one-time snapshot from an uploaded .ics

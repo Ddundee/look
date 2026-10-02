@@ -110,7 +110,10 @@ def update_event(event_id: str, payload: EventUpdate, session: Session = Depends
 
 @router.delete("/{event_id}")
 def delete_event(event_id: str, session: Session = Depends(get_db)) -> dict:
-    events_service.delete_event(session, _event_or_404(session, event_id))
+    try:
+        events_service.delete_event(session, _event_or_404(session, event_id))
+    except ValueError as exc:
+        raise _unprocessable(exc)
     return {"deleted_id": event_id}
 
 

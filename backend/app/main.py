@@ -1,5 +1,6 @@
+import asyncio
 import logging
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
@@ -9,12 +10,29 @@ from app import db
 from app import migrate as migrations
 from app.config import get_settings
 from app.logging_config import configure_logging
-from app.routers import auth, events, leetcode, nutrition, recurring, system, tasks, today
+from app.routers import auth, calendars, events, leetcode, nutrition, recurring, system, tasks, today
 from app.seed import seed_demo_data
+from app.services import calendar_sync
 from app.services.auth import ensure_admin_user
 
 configure_logging()
 logger = logging.getLogger("todo_app")
+
+
+async def _calendar_sync_loop() -> None:
+    """Re-fetch calendar subscriptions in the background: all of them
+    shortly after startup, then each whenever its interval has passed.
+    Startup never waits on (or fails because of) a remote calendar."""
+    settings = get_settings()
+    await asyncio.sleep(settings.calendar_sync_startup_delay_seconds)
+    startup = True
+    while True:
+        try:
+            await asyncio.to_thread(calendar_sync.run_due_syncs, db.engine, startup)
+        except Exception:  # noqa: BLE001 - never let the loop die
+            logger.exception("Calendar sync pass failed")
+        startup = False
+        await asyncio.sleep(settings.calendar_sync_check_seconds)
 
 
 @asynccontextmanager
@@ -29,8 +47,13 @@ async def lifespan(_app: FastAPI):
         ensure_admin_user(session)
         if settings.seed_demo_data:
             seed_demo_data(session)
+    scheduler = asyncio.create_task(_calendar_sync_loop()) if settings.calendar_sync_enabled else None
     logger.info("Startup complete")
     yield
+    if scheduler is not None:
+        scheduler.cancel()
+        with suppress(asyncio.CancelledError):
+            await scheduler
 
 
 app = FastAPI(
@@ -54,6 +77,7 @@ app.include_router(today.router)
 app.include_router(recurring.router)
 app.include_router(nutrition.router)
 app.include_router(events.router)
+app.include_router(calendars.router)
 app.include_router(leetcode.router)
 app.include_router(system.router)
 
