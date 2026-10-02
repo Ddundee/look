@@ -34,6 +34,8 @@ from app.config import get_settings
 from app.logging_config import configure_logging
 from app.models.enums import RecurrencePattern, TaskPriority, TaskStatus
 from app.schemas import (
+    LeetCodeAttemptCreate,
+    LeetCodeGoalsSet,
     EventCreate,
     EventRead,
     EventUpdate,
@@ -48,6 +50,7 @@ from app.schemas import (
 )
 from app.security import constant_time_equals
 from app.services import events as events_service
+from app.services import leetcode as leetcode_service
 from app.services import nutrition as nutrition_service
 from app.services import recurrence as recurrence_service
 from app.services import tasks as tasks_service
@@ -68,7 +71,10 @@ mcp = MCPServer(
         "log_food, then tell them their totals and what's left from the "
         "returned day summary. And a schedule of events (classes, games, "
         "parties) with standard RRULE recurrence: create_event, "
-        "get_schedule, edit_occurrence for single dates. Dates are ISO "
+        "get_schedule, edit_occurrence for single dates. And a LeetCode "
+        "tracker for what the user actually solved (separate from tasks, "
+        "which are plans): log_leetcode_attempt, then report progress from "
+        "the returned stats. Dates are ISO "
         "'YYYY-MM-DD', times are "
         "'HH:MM' 24-hour."
     ),
@@ -895,6 +901,129 @@ def check_conflicts(start_at: str, end_at: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# LeetCode tracking
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+def log_leetcode_attempt(
+    problem_number: int,
+    title: Optional[str] = None,
+    difficulty: Optional[str] = None,
+    topics: Optional[List[str]] = None,
+    solved: bool = True,
+    solved_independently: Optional[bool] = None,
+    hint_used: bool = False,
+    duration_minutes: Optional[int] = None,
+    language: Optional[str] = None,
+    confidence: Optional[int] = None,
+    notes: Optional[str] = None,
+    attempted_at: Optional[str] = None,
+) -> dict:
+    """Record what the user actually did on a LeetCode problem, solved or
+    not. Example: "I solved 560 in 23 minutes in Java, needed one hint,
+    confidence 3/5" -> problem_number=560, solved=true, hint_used=true,
+    duration_minutes=23, language="Java", confidence=3.
+
+    A problem is identified by its number: logging it again adds an attempt
+    to the same problem. title and difficulty (easy/medium/hard) are needed
+    only the first time a number is logged; fill them in from your own
+    knowledge of LeetCode, along with its main topics/patterns (e.g.
+    "Prefix Sum", "Sliding Window", "Graphs", "DP"), which are merged into
+    the problem. solved_independently defaults to solved without a hint.
+    confidence is 1 (very weak) to 5 (very strong). attempted_at is local
+    'YYYY-MM-DDTHH:MM', default now.
+
+    This is the record of practice; a planned "do 2 LeetCodes" stays a
+    task. Returns the attempt and updated progress (today vs goal, streak,
+    week) to tell the user where they stand."""
+    try:
+        payload = LeetCodeAttemptCreate.model_validate({
+            "problem_number": problem_number, "title": title, "difficulty": difficulty,
+            "topics": topics or [], "solved": solved, "solved_independently": solved_independently,
+            "hint_used": hint_used, "duration_minutes": duration_minutes, "language": language,
+            "confidence": confidence, "notes": notes, "attempted_at": attempted_at,
+        })
+    except ValidationError as exc:
+        return _error(exc)
+    with _session() as session:
+        try:
+            attempt, problem, created = leetcode_service.log_attempt(session, payload, source="mcp")
+        except ValueError as exc:
+            return _error(exc)
+        return {
+            "attempt": leetcode_service.attempt_read(attempt, problem).model_dump(mode="json"),
+            "problem_created": created,
+            "progress": leetcode_service.stats(session).model_dump(mode="json"),
+        }
+
+
+@mcp.tool()
+def get_leetcode_progress() -> dict:
+    """LeetCode progress: distinct problems solved (and by difficulty),
+    attempts, average solve time, hint usage and independent-solve rates,
+    current and best streak, solved today / this week against the daily and
+    weekly goals, and plain-language insights about weak topics."""
+    with _session() as session:
+        return leetcode_service.stats(session).model_dump(mode="json")
+
+
+@mcp.tool()
+def get_recent_leetcode_attempts(
+    limit: int = 10,
+    difficulty: Optional[str] = None,
+    topic: Optional[str] = None,
+    solved: Optional[bool] = None,
+) -> dict:
+    """Most recent LeetCode attempts, newest first, each with its problem.
+    Optionally filter by difficulty, topic or solved."""
+    if difficulty is not None and difficulty not in ("easy", "medium", "hard"):
+        return {"error": "difficulty must be easy, medium or hard."}
+    with _session() as session:
+        attempts = leetcode_service.list_attempts(
+            session, limit=limit, difficulty=difficulty, topic=topic, solved=solved
+        )
+        return {"attempts": [a.model_dump(mode="json") for a in attempts], "count": len(attempts)}
+
+
+@mcp.tool()
+def get_leetcode_topic_stats() -> dict:
+    """Per-topic progress, weakest first. weakness (0 strong .. 1 weak) is
+    the mean of unsolved rate, not-independent rate, hint rate and low
+    confidence over each topic's recent attempts; `reasons` explains it in
+    words. Use it to suggest what to practice next."""
+    with _session() as session:
+        return leetcode_service.topic_stats(session).model_dump(mode="json")
+
+
+@mcp.tool()
+def get_leetcode_problem(problem_number: int) -> dict:
+    """One tracked problem by its LeetCode number, with every attempt."""
+    with _session() as session:
+        problem = leetcode_service.get_problem_by_number(session, problem_number)
+        if problem is None:
+            return {"error": f"Problem {problem_number} isn't tracked yet."}
+        return {
+            "problem": leetcode_service.problem_summary(session, problem).model_dump(mode="json"),
+            "attempts": [
+                a.model_dump(mode="json")
+                for a in leetcode_service.list_attempts(session, limit=500, problem_id=problem.id)
+            ],
+        }
+
+
+@mcp.tool()
+def set_leetcode_goals(daily_target: int, weekly_target: int) -> dict:
+    """Set the daily and weekly LeetCode targets (solved problems)."""
+    try:
+        payload = LeetCodeGoalsSet(daily_target=daily_target, weekly_target=weekly_target)
+    except ValidationError as exc:
+        return _error(exc)
+    with _session() as session:
+        return leetcode_service.set_goals(session, payload).model_dump(mode="json")
+
+
+# ---------------------------------------------------------------------------
 # Resources (read-only)
 # ---------------------------------------------------------------------------
 
@@ -903,6 +1032,12 @@ def check_conflicts(start_at: str, end_at: str) -> dict:
 def resource_today() -> dict:
     """Today's task bundle: scheduled, due today, overdue, recurring."""
     return get_today()
+
+
+@mcp.resource("leetcode://progress")
+def resource_leetcode_progress() -> dict:
+    """LeetCode progress, goals, streak and insights."""
+    return get_leetcode_progress()
 
 
 @mcp.resource("tasks://overdue")
