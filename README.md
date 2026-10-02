@@ -1,248 +1,146 @@
 # Look
 
-A self-hosted personal task manager, schedule and food log.
+Look is a self-hosted personal dashboard for keeping track of the things I use every day: tasks, schedule, nutrition, and LeetCode practice.
 
-A self-hosted task manager that is the single source of truth for your
-tasks — LeetCode/DSA practice, school, projects, errands, and recurring
-goals — with a web UI and an MCP server so Claude, ChatGPT, Cursor, or any
-other MCP-compatible client can read and manage your tasks directly.
+It runs on my own hardware and can be used from the web or through MCP clients like ChatGPT, Claude, and Cursor.
 
-Runs entirely on your own hardware (a Raspberry Pi or any Linux box) via
-Docker Compose. No external SaaS dependency, no required internet access
-after setup, works over localhost, your LAN, or Tailscale.
+## What it does
 
-## Architecture
+- **Tasks** — create, edit, complete, prioritize, and schedule tasks
+- **Today** — see what is planned, due, or overdue in one place
+- **Calendar** — manage one-time and recurring events
+- **Nutrition** — log food and track daily calorie and macro targets
+- **LeetCode** — log attempts, track streaks, goals, difficulty, topics, and confidence
+- **MCP** — let compatible AI clients read and update the same data
+- **Self-hosted** — runs locally with Docker and PostgreSQL
 
-```
-todo-app/
-  backend/            FastAPI + SQLModel REST API and shared service layer
-    app/
-      models/         Task, RecurrenceRule, User
-      services/       business logic (CRUD, recurrence, priority, today view)
-      routers/        REST endpoints (auth/tasks/today/recurring)
-    mcp_server/       MCP server (19 tools + 3 resources) — same DB, same service layer
-    tests/            pytest suite (incl. migration tests)
-  frontend/           Next.js (App Router) web UI, proxies /api/* to the backend
-  docker-compose.yml  db + backend + mcp + frontend
-  scripts/            backup.sh / restore.sh / upgrade.sh
-  docs/               deployment, Tailscale, MCP client setup
-```
+Look is meant to be a simple personal system rather than a general-purpose productivity platform.
 
-One Postgres database backs both the REST API (used by the web UI) and the
-MCP server — they're two processes sharing the same codebase and the same
-data, not two separate systems to keep in sync.
+## Quick start
 
-Prebuilt multi-arch (amd64/arm64) images are published to GitHub Container
-Registry as `ghcr.io/ddundee/look-backend`, `look-frontend` and
-`look-updater` on every push to `main` (see
-`.github/workflows/docker-publish.yml`), so `docker compose pull` works out
-of the box instead of building from source. The web app offers new versions
-as a one-click update; see `docs/DEPLOYMENT.md`.
-
-See [`docs/TASK_MODEL.md`](docs/TASK_MODEL.md) for the data model and
-priority-scoring logic, [`docs/MCP.md`](docs/MCP.md) for the full list of
-MCP tools/resources and client setup, [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
-for Raspberry Pi deployment, [`docs/DATABASE.md`](docs/DATABASE.md) for
-migrations, backups and safe upgrades, [`docs/LEETCODE.md`](docs/LEETCODE.md) for
-LeetCode tracking, and [`docs/TAILSCALE.md`](docs/TAILSCALE.md)
-for secure remote access.
-
-## Quickstart: Docker Compose (recommended)
+The easiest way to run Look is with Docker Compose.
 
 ```bash
-git clone <your-fork-url> todo-app
-cd todo-app
+git clone https://github.com/Ddundee/look.git
+cd look
 cp .env.example .env
-# Edit .env: set API_TOKEN, SESSION_SECRET, POSTGRES_PASSWORD, ADMIN_PASSWORD
-# to real random values. At minimum:
-#   openssl rand -hex 32   (run twice, once for API_TOKEN, once for SESSION_SECRET)
+```
 
+Edit `.env` and set the required secrets and login information, then start the app:
+
+```bash
 docker compose up -d --build
 ```
 
-Then open:
+Once it is running:
 
-- Web UI: http://localhost:3000 (log in with `ADMIN_USERNAME`/`ADMIN_PASSWORD` from `.env`)
-- REST API docs (Swagger UI): http://localhost:8000/docs
-- MCP server: `http://localhost:8001/mcp` (see [`docs/MCP.md`](docs/MCP.md) to connect a client)
+- Web app: `http://localhost:3000`
+- API docs: `http://localhost:8000/docs`
+- MCP server: `http://localhost:8001/mcp`
 
-Because ports are published on `${BIND_HOST}` (`0.0.0.0` by default), the
-same URLs work from your LAN (`http://<pi-ip>:3000`) and, once Tailscale is
-installed on the host, from your tailnet — see
-[`docs/TAILSCALE.md`](docs/TAILSCALE.md).
+For Raspberry Pi and remote-access setup, see [Deployment](docs/DEPLOYMENT.md) and [Tailscale](docs/TAILSCALE.md).
 
-## Local development (without Docker)
+## Local development
 
-**Backend:**
+### Backend
 
 ```bash
 cd backend
-python3 -m venv .venv && source .venv/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements-dev.txt
 
-export DB_ENGINE=sqlite SQLITE_PATH=./data/dev.db
-export API_TOKEN=dev-token SESSION_SECRET=dev-secret-change-me
-export ADMIN_USERNAME=admin ADMIN_PASSWORD=admin
+export DB_ENGINE=sqlite
+export SQLITE_PATH=./data/dev.db
+export API_TOKEN=dev-token
+export SESSION_SECRET=dev-secret-change-me
+export ADMIN_USERNAME=admin
+export ADMIN_PASSWORD=admin
 
-python -m app.migrate        # create/upgrade the schema (the app refuses to start otherwise)
+python -m app.migrate
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Run the test suite:
+Run backend tests with:
 
 ```bash
-cd backend && .venv/bin/pytest
+pytest -q
 ```
 
-Run the MCP server standalone (against the same SQLite file, same env vars):
-
-```bash
-python -m mcp_server.server --transport http   # http://localhost:8001/mcp
-# or, for a local stdio-spawned client (e.g. Claude Desktop):
-python -m mcp_server.server --transport stdio
-```
-
-**Frontend:**
+### Frontend
 
 ```bash
 cd frontend
-cp .env.local.example .env.local   # INTERNAL_API_BASE_URL=http://localhost:8000
+cp .env.local.example .env.local
 npm install
 npm run dev
 ```
 
-Open http://localhost:3000.
+Then open `http://localhost:3000`.
 
-## Raspberry Pi deployment
+## MCP
 
-See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for the full walkthrough
-(installing Docker on Raspberry Pi OS, cloning the repo, configuring
-`.env`, and making sure the stack survives a reboot). Short version:
+Look exposes an MCP server so supported AI clients can work with the same tasks, events, nutrition logs, and LeetCode data as the web app.
+
+The MCP endpoint is:
+
+```text
+http://<host>:8001/mcp
+```
+
+It uses the `API_TOKEN` from `.env` for authentication.
+
+See [MCP setup](docs/MCP.md) for connection examples and the available tools.
+
+## Updates and backups
+
+Look uses database migrations so updates can change the schema without recreating the database.
+
+To update a deployment:
 
 ```bash
-# On the Pi, with Docker + the Compose plugin installed:
-git clone <your-fork-url> todo-app && cd todo-app
-cp .env.example .env && nano .env   # fill in real secrets
-docker compose up -d --build
+./scripts/upgrade.sh
 ```
 
-`restart: unless-stopped` is set on every service, so as long as Docker
-itself starts on boot (`sudo systemctl enable docker`, on by default on
-most installs) the whole stack comes back up automatically after a power
-cycle or reboot.
+This backs up the database, applies migrations, restarts the app, and checks that the backend comes back healthy.
 
-## Connecting an MCP client
-
-The MCP server speaks the Streamable HTTP transport at
-`http://<host>:8001/mcp`, authenticated with a `Authorization: Bearer
-<API_TOKEN>` header (the same `API_TOKEN` from `.env`). Full setup for
-Claude Code, Claude Desktop, Cursor, and ChatGPT-style clients — plus the
-complete list of tools and resources — is in
-[`docs/MCP.md`](docs/MCP.md). Quick example (Claude Code CLI):
+To make a backup manually:
 
 ```bash
-claude mcp add --transport http personal-tasks http://<host>:8001/mcp \
-  --header "Authorization: Bearer <your API_TOKEN>"
+./scripts/backup.sh
 ```
 
-## Accessing the web UI through Tailscale
+Database migration and restore details are in [Database and upgrades](docs/DATABASE.md).
 
-Install Tailscale on the host running Docker (not inside the containers);
-because ports are published on `0.0.0.0`, they become reachable at your
-Tailscale IP / MagicDNS name automatically, with no port forwarding and no
-public exposure. Full instructions, including how to restrict access to
-*only* the tailnet (never LAN), are in [`docs/TAILSCALE.md`](docs/TAILSCALE.md).
+## Project structure
 
-## Connecting ChatGPT via OpenAI Secure MCP Tunnel
-
-To let ChatGPT/Codex/the Responses API reach this project's MCP server
-with no inbound port opened on your network, an opt-in `openai-tunnel`
-service (using [`openai/tunnel-client`](https://github.com/openai/tunnel-client))
-is included in `docker-compose.yml`. See the
-["Connecting ChatGPT via OpenAI Secure MCP Tunnel" section of `docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md#connecting-chatgpt-via-openai-secure-mcp-tunnel-optional)
-for setup.
-
-## Backing up the database
-
-```bash
-./scripts/backup.sh                 # writes backups/todo-app-<timestamp>.sql.gz
-RETAIN_DAYS=30 ./scripts/backup.sh  # keep 30 days instead of the default 14
+```text
+backend/        FastAPI backend, models, services, migrations, and MCP server
+frontend/       Next.js web app
+scripts/        backup, restore, and upgrade helpers
+docs/           setup and feature documentation
+docker-compose.yml
 ```
 
-Restore:
+The web app and MCP server use the same backend logic and PostgreSQL database, so changes made through either interface stay in sync.
 
-```bash
-./scripts/restore.sh backups/todo-app-20260101-030000.sql.gz
-```
+## Docs
 
-Put `backup.sh` in cron for automatic daily backups:
+- [Deployment](docs/DEPLOYMENT.md)
+- [Database and upgrades](docs/DATABASE.md)
+- [MCP setup](docs/MCP.md)
+- [LeetCode tracking](docs/LEETCODE.md)
+- [Task model](docs/TASK_MODEL.md)
+- [Tailscale](docs/TAILSCALE.md)
 
-```cron
-0 3 * * * cd /path/to/todo-app && ./scripts/backup.sh >> backups/backup.log 2>&1
-```
+## Stack
 
-## Updating the application later
+Look is built with:
 
-The easiest way is the **Update** button the web app shows when a new
-version is published (Settings → Version). From a shell:
-
-```bash
-cd todo-app
-git pull                       # only needed if docker-compose.yml/scripts changed
-./scripts/upgrade.sh           # backup -> pull -> migrate -> restart -> health check
-```
-
-`./scripts/upgrade.sh --build` builds from your checkout instead of pulling
-published images. See [`docs/DATABASE.md`](docs/DATABASE.md) for details.
-
-### Why this doesn't lose data or log you out
-
-- **Database**: Postgres data lives in the `todo-app_postgres_data` named
-  volume. Updates only replace images and recreate containers; volumes are
-  untouched. (Don't run `docker compose down -v`; `-v` deletes volumes.)
-- **Schema changes are versioned migrations** (Alembic). They run before
-  the app starts, after a backup, inside a transaction, and they never drop
-  tables or columns just because they left the models. A database from
-  before migrations existed is verified and adopted in place. See
-  [`docs/DATABASE.md`](docs/DATABASE.md).
-- **Your login survives**: the admin account is only seeded if no user
-  exists yet (`app/services/auth.py`), so an existing account is never
-  reset or overwritten by a restart. `SESSION_SECRET` stays in `.env`
-  across updates too, so your browser session isn't invalidated.
-- **Downtime is brief and scoped**: `docker compose up -d` only recreates
-  the containers whose image/config actually changed. Expect a few seconds
-  of downtime per affected service, not a full outage.
-
-## Testing
-
-```bash
-cd backend && .venv/bin/pytest -q
-alembic check                     # models vs migrations (needs a migrated DB)
-```
-
-Set `TEST_DATABASE_URL` to a **throwaway** PostgreSQL database to also run
-the migration tests on Postgres (CI does). The tests cover task CRUD, every recurrence pattern, priority-score
-ordering (including that manual priority is never overwritten),
-today-view assembly (including recurring-task materialization and dedup
-across sections), and MCP tool execution end-to-end against an in-memory
-database, plus migrations: fresh install, adopting a pre-migration
-database with real data, downgrade/upgrade, and model/migration drift.
-
-## V1 scope
-
-Implemented: persistent tasks, recurring tasks, Today view, deadlines,
-computed (never-overwriting) priority scoring, web UI, REST API, 19 MCP
-tools + 3 MCP resources, Docker deployment, token + session auth, backups.
-
-Deliberately deferred to keep V1 focused (see `integrations/` note below):
-Gmail/Calendar/GitHub/Slack/Discord connectors, natural-language parsing
-via an LLM (the quick-add bar uses a small local regex parser instead —
-no AI API required for the app to work).
-
-## Future integrations
-
-The service layer (`backend/app/services/`) is the seam for future
-connectors: an integration would call the same `services.tasks.*`
-functions the MCP tools and REST routes already use, rather than writing
-to the database directly. No integration code exists yet in V1 — this is
-left as a clean extension point.
+- Next.js
+- FastAPI
+- SQLModel / SQLAlchemy
+- PostgreSQL
+- Alembic
+- Docker Compose
+- MCP
