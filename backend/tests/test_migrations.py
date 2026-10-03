@@ -558,3 +558,33 @@ def test_category_life_areas_reorganize_untouched_defaults_only(db):
     cats = _categories(db)
     assert cats["work"] == ("Work", "violet", "solid", False) and cats["class"][3] is False
     assert "organizations" not in cats and cats["errands"] == ("Errands", "red", "solid", False)
+
+
+
+# ---- 0008: views -------------------------------------------------------------
+
+
+def test_views_migration_is_additive_and_guarded(db):
+    with db.begin() as conn:
+        command.upgrade(migrations.alembic_config(conn), "0007_category_life_areas")
+    with Session(db) as session:
+        seed_core(session)
+        seed_new_features(session)
+        session.commit()
+    before = snapshot(db, BASELINE_TABLES)
+    assert migrations.migrate(db) == migrations.head_revision()
+    assert snapshot(db, BASELINE_TABLES) == before
+    with db.connect() as conn:
+        assert conn.execute(sa.text("SELECT COUNT(*) FROM views")).scalar() == 0  # defaults live in code
+    migrations.check_drift(db)
+
+    with db.begin() as conn:
+        conn.execute(sa.text(
+            "INSERT INTO views (id, key, name, icon, kind, show_in_nav, sort_order, archived, layout, created_at, updated_at) "
+            "VALUES ('v1', 'school', 'School', 'book', 'custom', true, 1, false, '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+        ))
+    with pytest.raises(RuntimeError, match="allow-data-loss"):
+        migrations.downgrade(db, "0007_category_life_areas")
+    migrations.downgrade(db, "0007_category_life_areas", allow_data_loss=True)
+    assert "views" not in tables_in(db)
+    assert snapshot(db, BASELINE_TABLES) == before

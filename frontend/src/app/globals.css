@@ -254,6 +254,16 @@
   color: color-mix(in oklch, var(--look) 82%, var(--fg));
 }
 
+/* View grids (components/views): on desktop the height unit is a sixth of
+   the space below the page header, so a "full" widget fills the screen and
+   the default Today/Dashboard layouts fit without page scrolling. Tablets
+   and phones flow at natural height. */
+@media (min-width: 1024px) {
+  .view-grid {
+    grid-auto-rows: max(4.75rem, calc((100dvh - 9rem - 5rem) / 6));
+  }
+}
+
 /* Thin, theme-aware scrollbars for the scrolling content pane. */
 .scroll-area {
   scrollbar-width: thin;

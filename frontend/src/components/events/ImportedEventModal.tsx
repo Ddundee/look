@@ -40,7 +40,7 @@ export default function ImportedEventModal({ occ, onClose }: { occ: Occurrence; 
       }}
       footer={
         <>
-          <Link href="/settings#calendars" onClick={onClose} className={BUTTON_SECONDARY}>
+          <Link href="/settings/calendars" onClick={onClose} className={BUTTON_SECONDARY}>
             Manage calendars
           </Link>
           {occ.external_url ? (

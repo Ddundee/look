@@ -124,7 +124,7 @@ images. A few minutes later the app shows an "Update available" toast
 listing what changed. Press **Update**: the `updater` container pulls the
 new images and restarts `backend`, `mcp` and `frontend`, then the page
 reloads itself on the new version (roughly 10 to 30 seconds of downtime).
-**Later** hides the toast until the next new version. Settings → Version
+**Later** hides the toast until the next new version. Settings → Updates & version
 shows what's running and has a **Check for updates** button.
 
 The updater backs up the database to `backups/` before restarting

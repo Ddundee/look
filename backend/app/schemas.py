@@ -1,5 +1,5 @@
 from datetime import date, datetime, time, timezone
-from typing import Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
 
@@ -859,3 +859,89 @@ class LeetCodeImportResult(BaseModel):
     created: int
     duplicates: int  # already imported (same submission id), skipped
     problems_created: int
+
+
+# ---------------------------------------------------------------------------
+# Views: Dashboard, Today and custom views made of widgets
+# ---------------------------------------------------------------------------
+
+# Width in a 12-column desktop grid (quarter = 3 columns … full = 12) and
+# height in sixths of the screen. Semantic sizes only, never pixels.
+WidgetSize = Literal["quarter", "third", "half", "two_thirds", "full"]
+WidgetHeight = Literal["short", "medium", "tall", "full"]
+
+
+class WidgetInstance(BaseModel):
+    """One widget on a view. `type` must be a registered widget key
+    (app.services.views.WIDGETS); `config` is checked against that
+    widget's own fields."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,39}$")
+    type: str = Field(max_length=40)
+    size: WidgetSize
+    height: WidgetHeight = "medium"
+    visible: bool = True
+    config: Dict[str, Any] = Field(default_factory=dict)
+
+
+class ViewLayoutUpdate(BaseModel):
+    widgets: List[WidgetInstance] = Field(max_length=24)
+
+
+class ViewCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=40)
+    icon: str = "squares"
+    show_in_nav: bool = True
+    # Starting widgets only; nothing about the user is inferred.
+    preset: Literal["blank", "planning", "school", "overview"] = "blank"
+
+    @field_validator("name")
+    @classmethod
+    def _name(cls, v: str) -> str:
+        return _clean_title(v)
+
+
+class ViewUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=40)
+    icon: Optional[str] = None
+    show_in_nav: Optional[bool] = None
+    archived: Optional[bool] = None
+
+    @field_validator("name")
+    @classmethod
+    def _name(cls, v: Optional[str]) -> Optional[str]:
+        return _clean_title(v)
+
+
+class ViewRead(BaseModel):
+    key: str
+    name: str
+    icon: str
+    kind: Literal["system", "custom"]
+    show_in_nav: bool
+    sort_order: int
+    archived: bool
+    customized: bool  # system views: differs from the app's default layout
+    widgets: List[WidgetInstance]
+
+
+class ViewList(BaseModel):
+    views: List[ViewRead]
+
+
+class ViewOrder(BaseModel):
+    keys: List[str] = Field(max_length=200)  # custom view keys, in nav order
+
+
+class WidgetTypeRead(BaseModel):
+    type: str
+    title: str
+    description: str
+    sizes: List[str]
+    default_size: str
+    heights: List[str]
+    default_height: str
+    multiple: bool
+    config_defaults: Dict[str, Any]

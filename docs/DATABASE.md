@@ -128,7 +128,7 @@ the build.
 
 ## Upgrading a running install
 
-**From the web app:** the Update button (Settings → Version): pull, then
+**From the web app:** the Update button (Settings → Updates & version): pull, then
 backup, then restart (migrations run on start).
 
 **From a shell:**
