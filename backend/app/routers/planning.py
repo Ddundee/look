@@ -35,7 +35,7 @@ def _not_found(what: str, ident: str) -> HTTPException:
 
 @router.get("/api/categories", response_model=List[CategoryRead])
 def list_categories(include_archived: bool = False, session: Session = Depends(get_db)):
-    return categories_service.list_categories(session, include_archived)
+    return categories_service.read_all(session, include_archived)
 
 
 @router.post("/api/categories", response_model=CategoryRead, status_code=status.HTTP_201_CREATED)

@@ -452,6 +452,8 @@ export interface Category {
   style: string;
   is_system: boolean;
   archived: boolean;
+  /** Tasks + events using it (in lists). */
+  item_count: number;
 }
 
 export interface CourseSummary {

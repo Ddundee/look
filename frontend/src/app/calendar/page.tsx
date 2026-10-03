@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 import { compactTime } from "@/lib/calendarEvents";
 import { lookVars, titleWithoutCourse } from "@/lib/palette";
 import { useNow } from "@/lib/useNow";
-import { useLook } from "@/components/look/Look";
+import { LookMark, useLook } from "@/components/look/Look";
 import { onEventsChanged, onTasksChanged } from "@/lib/events";
 import { addDaysIso, formatDateLong, todayIso } from "@/lib/format";
 import { isTaskDone, type Occurrence, type Task } from "@/lib/types";
@@ -38,17 +38,24 @@ function coveredDays(o: Occurrence): string[] {
   return out.length ? out : [first];
 }
 
-/** An event in a month cell: tinted in its course/category look; school
- * items also get a cap icon, so color is never the only signal. */
+/** An event in a month cell. A class (meeting or assignment) gets the
+ * academic tint and a cap icon; anything else a small category shape and
+ * a restrained tint. The shape/icon, not only color, says which. */
 function MonthEventChip({ occ: o }: { occ: Occurrence }) {
   const look = useLook(o);
   return (
     <span
-      className="look-fill flex items-center gap-1 truncate rounded px-1 py-px text-[11px] leading-4 text-fg"
+      className={`look-fill flex items-center gap-1 truncate rounded py-px pr-1 text-[11px] leading-4 text-fg ${look.kind === "course" ? "pl-1.5" : "pl-1"}`}
+      data-kind={look.kind}
       data-style={look.style}
       style={lookVars(look)}
+      title={look.kind === "course" ? `${look.label} · ${o.title}` : `${o.title} (${look.label})`}
     >
-      {look.kind === "course" && <GraduationCapIcon weight="fill" className="look-ink h-3 w-3 shrink-0" aria-label={look.label} />}
+      {look.kind === "course" ? (
+        <GraduationCapIcon weight="fill" className="look-ink h-3 w-3 shrink-0" aria-label={look.label} />
+      ) : (
+        <LookMark look={look} className="h-1.5 w-1.5" />
+      )}
       {!o.all_day && <span className="shrink-0 font-mono text-fg-muted">{compactTime(o.start_at)}</span>}
       <span className={`truncate ${o.completed ? "text-fg-faint line-through" : ""}`}>{titleWithoutCourse(o.title, o.course)}</span>
     </span>
@@ -62,11 +69,8 @@ function MonthTaskChip({ task: t }: { task: Task }) {
       className={`flex items-center gap-1 truncate rounded px-1 py-px text-[11px] leading-4 ${
         isTaskDone(t) ? "text-fg-faint line-through" : "text-fg-muted"
       }`}
-      style={lookVars(look)}
     >
-      <span className="look-ink shrink-0 font-semibold" aria-hidden>
-        #
-      </span>
+      <LookMark look={look} className="h-1.5 w-1.5" />
       <span className="truncate">{t.title}</span>
     </span>
   );

@@ -274,6 +274,15 @@ def _apply(event: Event, parsed: ics.ParsedEvent, now: datetime) -> None:
     event.updated_at = now
 
 
+def _file_category(event: Event, parsed: ics.ParsedEvent) -> None:
+    """Something from a Canvas course is school, even before (or without) a
+    course match. Imported events can't be recategorized by hand, so this
+    only ever replaces the generic default. Runs on every sync, so items
+    imported earlier are refiled too."""
+    if parsed.external_context and event.category == "other":
+        event.category = "school"
+
+
 def _replace_overrides(session: Session, event: Event, parsed: ics.ParsedEvent) -> None:
     for ov in session.exec(select(EventOverride).where(EventOverride.event_id == event.id)).all():
         session.delete(ov)
@@ -337,6 +346,7 @@ def reconcile(session: Session, sub: CalendarSubscription, parsed: List[ics.Pars
                           title=item.title, start_at=item.start_at, end_at=item.end_at)
             _apply(event, item, now)
             courses_service.apply(session, event, create=True)
+            _file_category(event, item)
             _reconcile_completion(event, item, now)
             session.add(event)
             session.flush()  # the overrides reference it
@@ -345,6 +355,7 @@ def reconcile(session: Session, sub: CalendarSubscription, parsed: List[ics.Pars
         elif event.external_hash != digest or event.external_status != item.status:
             _apply(event, item, now)
             courses_service.apply(session, event, create=True)
+            _file_category(event, item)
             _reconcile_completion(event, item, now)
             session.add(event)
             _replace_overrides(session, event, item)
@@ -354,6 +365,7 @@ def reconcile(session: Session, sub: CalendarSubscription, parsed: List[ics.Pars
             # Courses aren't feed content: re-checked every sync, so links
             # learned since (or a new course) apply to existing items too.
             courses_service.apply(session, event, create=True)
+            _file_category(event, item)
             changed = _reconcile_completion(event, item, now)
             session.add(event)
             if changed:

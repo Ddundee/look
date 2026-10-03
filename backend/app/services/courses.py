@@ -35,7 +35,9 @@ _CODE = re.compile(r"^\s*([A-Za-z]{2,5})[\s_\-]*(\d{4}[A-Za-z]?)(?![\dA-Za-z])")
 _BRACKET_SUFFIX = re.compile(r"\[([^\[\]]{2,40})\]\s*$")
 _CANVAS_COURSE_CONTEXT = re.compile(r"^course_\d+$")
 # Colors handed to new courses, in order, skipping ones other courses use.
-_COURSE_COLORS = ("blue", "violet", "teal", "orange", "pink", "green", "amber", "indigo", "red", "cyan",
+# Spread around the hue wheel so the first several classes are easy to
+# tell apart (no blue/sky/cyan/teal run); existing courses keep theirs.
+_COURSE_COLORS = ("blue", "orange", "violet", "green", "pink", "teal", "amber", "indigo", "red", "cyan",
                   "lime", "sky", "yellow", "slate")
 
 

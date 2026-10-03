@@ -65,17 +65,20 @@ function AssignmentRow({
           {titleWithoutCourse(item.title, item.course)}
         </button>
         <div className={`mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs ${item.done ? "text-fg-faint" : "text-fg-muted"}`}>
-          {item.course ? <CourseBadge course={item.course} /> : <span>{look.label}</span>}
+          {item.course ? (
+            <CourseBadge course={item.course} />
+          ) : occ.subscription_name ? (
+            <span className="inline-flex items-center gap-1">
+              <CalendarDotsIcon className="h-3.5 w-3.5" aria-hidden />
+              {occ.subscription_name}
+            </span>
+          ) : (
+            <span>{look.label}</span>
+          )}
           {due && (
             <span className={`font-mono tabular-nums ${overdue && !item.done ? "text-danger" : ""}`}>
               {overdue && item.due_date ? `${formatDate(item.due_date)}, ` : "Due "}
               {due}
-            </span>
-          )}
-          {occ.subscription_name && (
-            <span className="inline-flex items-center gap-1">
-              <CalendarDotsIcon className="h-3.5 w-3.5" aria-hidden />
-              {occ.subscription_name}
             </span>
           )}
         </div>

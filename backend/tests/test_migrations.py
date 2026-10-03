@@ -92,7 +92,7 @@ def seed_new_features(session: Session) -> None:
     event_id = "evt-cs101"
     events = sa.Table("events", sa.MetaData(), autoload_with=session.connection())
     session.execute(sa.insert(events).values(
-        id=event_id, title="CS 101", category="class", location="Hall A", notes=None, all_day=False,
+        id=event_id, title="CS 101", category="social", location="Hall A", notes=None, all_day=False,
         start_at=datetime(2026, 8, 24, 10, 0), end_at=datetime(2026, 8, 24, 10, 50),
         rrule="FREQ=WEEKLY;BYDAY=MO,WE,FR;UNTIL=20261212T235959", exdates=["2026-11-27"], source="manual",
         created_at=datetime(2026, 8, 20, 9, 0), updated_at=datetime(2026, 8, 20, 9, 0),
@@ -424,7 +424,7 @@ def test_courses_and_categories_migration_preserves_and_seeds(db):
         command.upgrade(migrations.alembic_config(conn), "0004_event_deadline_completion")
     with Session(db) as session:
         seed_core(session)  # categories "LeetCode" and "school"
-        seed_new_features(session)  # event category "class"
+        seed_new_features(session)  # event category "social"
         session.commit()
     with db.begin() as conn:  # a category nobody predefined, and a completed import
         conn.execute(sa.text("UPDATE tasks SET category = 'VT Hacks' WHERE title = 'Two Sum'"))
@@ -510,3 +510,51 @@ def test_leetcode_import_notes_are_cleaned_and_unknowns_restored(db):
     migrations.downgrade(db, "0005_courses_and_categories", allow_data_loss=True)
     with db.connect() as conn:
         assert conn.execute(sa.text("SELECT COUNT(*) FROM leetcode_attempts WHERE hint_used IS NULL")).scalar() == 0
+
+
+
+# ---- 0007: category life areas ---------------------------------------------
+
+
+def _categories(db):
+    with db.connect() as conn:
+        return {r[0]: (r[1], r[2], r[3], bool(r[4])) for r in conn.execute(sa.text(
+            "SELECT key, name, color, style, archived FROM categories"
+        ))}
+
+
+def test_category_life_areas_reorganize_untouched_defaults_only(db):
+    with db.begin() as conn:
+        command.upgrade(migrations.alembic_config(conn), "0006_leetcode_import_metadata")
+        conn.execute(sa.text(
+            "INSERT INTO events (id, title, category, all_day, start_at, end_at, exdates, source, created_at, updated_at, "
+            "is_deadline) VALUES ('e1', 'CS 101', 'class', false, '2026-10-05 09:00:00', '2026-10-05 10:00:00', '[]', "
+            "'manual', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, false), "
+            "('e2', 'Pickup game', 'sports', false, '2026-10-06 18:00:00', '2026-10-06 19:00:00', '[]', 'manual', "
+            "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, false)"
+        ))
+        # The user restyled Errands; a custom category exists.
+        conn.execute(sa.text("UPDATE categories SET color = 'red', updated_at = CURRENT_TIMESTAMP WHERE key = 'errands'"))
+        conn.execute(sa.text(
+            "INSERT INTO categories (id, key, name, color, style, is_system, archived, created_at, updated_at) "
+            "VALUES ('c-oa', 'OA', 'OA', 'cyan', 'solid', false, false, '2026-09-01', '2026-09-01')"
+        ))
+
+    assert migrations.migrate(db) == migrations.head_revision()
+    cats = _categories(db)
+    assert cats["work"] == ("Career", "violet", "soft", False)  # renamed by name; key unchanged
+    assert cats["project"] == ("Projects", "teal", "outline", False)
+    assert cats["organizations"][0] == "Organizations" and cats["health"][0] == "Health"
+    assert cats["errands"] == ("Errands", "red", "solid", False)  # customized: untouched
+    assert cats["OA"] == ("OA", "cyan", "solid", False)  # user category: untouched
+    assert cats["class"][3] is True and cats["appointment"][3] is True  # merged / unused: archived
+    assert cats["sports"][3] is False  # used by an event: left alone
+    with db.connect() as conn:
+        assert conn.execute(sa.text("SELECT category FROM events WHERE id = 'e1'")).scalar() == "school"
+        assert conn.execute(sa.text("SELECT category FROM events WHERE id = 'e2'")).scalar() == "sports"
+    migrations.check_drift(db)
+
+    migrations.downgrade(db, "0006_leetcode_import_metadata")
+    cats = _categories(db)
+    assert cats["work"] == ("Work", "violet", "solid", False) and cats["class"][3] is False
+    assert "organizations" not in cats and cats["errands"] == ("Errands", "red", "solid", False)
