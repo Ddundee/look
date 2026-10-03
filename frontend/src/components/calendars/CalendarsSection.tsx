@@ -14,7 +14,8 @@ import { api } from "@/lib/api";
 import { notifyEventsChanged } from "@/lib/events";
 import { toast, toastError } from "@/lib/toast";
 import type { CalendarSubscription, CalendarSyncResult } from "@/lib/types";
-import { BUTTON_GHOST_SM, BUTTON_PRIMARY, BUTTON_SECONDARY, CARD, FAINT, FIELD, LABEL, MUTED, SECTION_HEADING } from "@/lib/ui";
+import { BUTTON_GHOST_SM, BUTTON_PRIMARY, BUTTON_SECONDARY, CARD, FAINT, FIELD, LABEL, MUTED } from "@/lib/ui";
+import SectionHeader from "../settings/SectionHeader";
 
 const INTERVALS: { minutes: number; label: string }[] = [
   { minutes: 15, label: "Every 15 minutes" },
@@ -102,20 +103,13 @@ export default function CalendarsSection() {
   const files = subs?.filter((s) => s.source_type === "file") ?? [];
 
   return (
-    <section id="calendars" className="scroll-mt-6 space-y-3">
-      <h2 className={SECTION_HEADING}>
-        <CalendarDotsIcon weight="bold" className="h-4 w-4 text-accent" aria-hidden />
-        Calendars
-      </h2>
+    <section id="calendars" className="scroll-mt-6 space-y-4">
+      <SectionHeader
+        icon={CalendarDotsIcon}
+        title="Calendars"
+        summary="ICS feeds such as Canvas. Look re-checks each link on its schedule, so new and changed events arrive on their own."
+      />
       <div className={`divide-y divide-line ${CARD}`}>
-        <div className="space-y-1 p-5">
-          <p className={`text-sm ${MUTED}`}>
-            Subscribe to any calendar that gives you an ICS link (Canvas, school or team calendars, Google
-            Calendar&apos;s secret iCal address). Look re-checks the link on its schedule, so new assignments, moved
-            deadlines and cancellations show up on their own. Its events appear in your calendar, read-only.
-          </p>
-        </div>
-
         {loadError && (
           <p role="alert" className="flex items-center gap-2 px-5 py-3 text-sm text-danger">
             <WarningCircleIcon weight="fill" className="h-4 w-4 shrink-0" aria-hidden />

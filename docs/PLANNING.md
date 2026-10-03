@@ -97,9 +97,8 @@ is in `frontend/src/app/globals.css` (`.look-edge`, `.look-mark`,
 `.look-fill`, `.look-ink`), and `lib/palette.ts` picks an item's look:
 course first, then category.
 
-Settings → **Planning & appearance** shows Courses and Categories as
-compact summaries; **Manage** opens their lists, and a row opens its
-editor. A course's aliases and Canvas links are under "Advanced" in its
+**Settings → Courses** and **Settings → Categories** list them; a row
+opens its editor. A course's aliases and Canvas links are under "Advanced" in its
 editor.
 
 ## Things to do
