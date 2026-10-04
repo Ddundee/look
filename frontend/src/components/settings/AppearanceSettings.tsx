@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { MoonIcon, PaintBrushIcon, SunIcon } from "@phosphor-icons/react";
-import { readSidebarCollapsed, setSidebarCollapsed } from "@/lib/sidebar";
+import { readSidebarCollapsed, setSidebarCollapsed, SIDEBAR_EVENT } from "@/lib/sidebar";
 import { getServerThemeSnapshot, getThemeSnapshot, setTheme, subscribeTheme } from "@/lib/theme";
 import { CARD } from "@/lib/ui";
 import SectionHeader from "./SectionHeader";
@@ -15,6 +15,10 @@ export default function AppearanceSettings() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time read of a browser-only preference
     setCollapsed(readSidebarCollapsed());
+    // ⌘S and the sidebar button change it too.
+    const onChange = (e: Event) => setCollapsed(Boolean((e as CustomEvent<boolean>).detail));
+    window.addEventListener(SIDEBAR_EVENT, onChange);
+    return () => window.removeEventListener(SIDEBAR_EVENT, onChange);
   }, []);
 
   return (
@@ -54,10 +58,7 @@ export default function AppearanceSettings() {
             role="switch"
             aria-checked={collapsed}
             aria-label="Collapsed sidebar"
-            onClick={() => {
-              setCollapsed(!collapsed);
-              setSidebarCollapsed(!collapsed);
-            }}
+              onClick={() => setSidebarCollapsed(!collapsed)}
             className={`relative h-5 w-8 shrink-0 rounded-full transition-colors duration-150 ${collapsed ? "bg-accent" : "bg-line-strong"}`}
           >
             <span className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-surface shadow-sm transition-transform duration-150 ${collapsed ? "translate-x-3" : ""}`} />

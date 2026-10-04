@@ -22,7 +22,7 @@ import {
 import { api } from "@/lib/api";
 import { useNavCounts, type NavCounts } from "@/lib/useNavCounts";
 import type { LookView } from "@/lib/types";
-import { readSidebarCollapsed, SIDEBAR_COLLAPSED_KEY, SIDEBAR_EVENT } from "@/lib/sidebar";
+import { readSidebarCollapsed, setSidebarCollapsed, SIDEBAR_EVENT } from "@/lib/sidebar";
 import { ICON_BUTTON } from "@/lib/ui";
 import { navViews, useViews } from "@/lib/viewsStore";
 import { viewIcon } from "./views/icons";
@@ -78,7 +78,7 @@ function Sidebar({
   const customViews = navViews(views);
 
   function renderItem(item: { href: string; label: string; icon: Icon; count?: keyof NavCounts }) {
-          const active = pathname?.startsWith(item.href);
+          const active = pathname === item.href || (pathname?.startsWith(`${item.href}/`) ?? false);
           const count = item.count && counts ? counts[item.count] : 0;
           const overdue = item.count === "today" && counts ? counts.overdue : 0;
           const ItemIcon = item.icon;
@@ -226,16 +226,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     window.addEventListener(SIDEBAR_EVENT, onChange);
     return () => window.removeEventListener(SIDEBAR_EVENT, onChange);
   }, []);
-  const toggleCollapsed = useCallback(() => {
-    setCollapsed((c) => {
-      try {
-        localStorage.setItem(SIDEBAR_COLLAPSED_KEY, c ? "0" : "1");
-      } catch {
-        // not persisted; still toggles for this visit
-      }
-      return !c;
-    });
-  }, []);
+  // Persists and broadcasts; the listener above (and Appearance) update.
+  const toggleCollapsed = useCallback(() => setSidebarCollapsed(!collapsed), [collapsed]);
 
   // Cmd+S / Ctrl+S toggles it (instead of the browser's "Save page").
   useEffect(() => {

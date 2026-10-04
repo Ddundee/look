@@ -38,6 +38,18 @@ def test_layout_persists_and_reset_restores_current_default(session):
     assert [x.model_dump() for x in reset.widgets] == views_svc.validate_layout(views_svc.SYSTEM_VIEWS["today"].layout)
 
 
+def test_stale_widgets_in_a_customized_system_view_are_skipped(session):
+    # A widget dropped from the registry in a later version must not break
+    # Dashboard or Today for people who customized them.
+    views_svc.save_layout(session, "today", [w("schedule", "half", "full")])
+    row = session.exec(select(View).where(View.key == "today")).one()
+    row.layout = [*row.layout, {"id": "gone", "type": "retired_widget", "size": "half"}]
+    session.add(row)
+    session.commit()
+    assert [x.type for x in views_svc.get_view(session, "today").widgets] == ["schedule"]
+    assert any(v.key == "today" for v in views_svc.list_views(session))
+
+
 def test_invalid_layouts_are_rejected(session):
     bad = [
         ([w("things_to_do") | {"type": "iframe"}], "unknown widget type"),

@@ -201,7 +201,7 @@ def _system_read(sv: SystemView, row: Optional[View]) -> ViewRead:
     customized = row is not None and row.layout is not None
     return ViewRead(key=sv.key, name=sv.name, icon=sv.icon, kind="system", show_in_nav=True, sort_order=0,
                     archived=False, customized=customized,
-                    widgets=validate_layout(row.layout if customized else sv.layout))
+                    widgets=_safe_layout(row.layout) if customized else validate_layout(sv.layout))
 
 
 def _custom_read(row: View) -> ViewRead:
