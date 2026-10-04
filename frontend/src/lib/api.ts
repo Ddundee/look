@@ -1,4 +1,6 @@
 import type {
+  LookView,
+  ViewWidget,
   Category,
   Course,
   WorkPlan,
@@ -230,6 +232,19 @@ export const api = {
   },
 
   getVersion: () => request<{ revision: string | null; timezone?: string }>("/api/system/version"),
+
+  listViews: (includeArchived = false) =>
+    request<{ views: LookView[] }>(`/api/views${qs({ include_archived: includeArchived || undefined })}`),
+  createView: (payload: { name: string; icon: string; show_in_nav?: boolean; preset?: string }) =>
+    request<LookView>("/api/views", { method: "POST", body: JSON.stringify(payload) }),
+  updateView: (key: string, payload: { name?: string; icon?: string; show_in_nav?: boolean; archived?: boolean }) =>
+    request<LookView>(`/api/views/${encodeURIComponent(key)}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  saveViewLayout: (key: string, widgets: ViewWidget[]) =>
+    request<LookView>(`/api/views/${encodeURIComponent(key)}/layout`, { method: "PUT", body: JSON.stringify({ widgets }) }),
+  resetView: (key: string) => request<LookView>(`/api/views/${encodeURIComponent(key)}/reset`, { method: "POST" }),
+  reorderViews: (keys: string[]) =>
+    request<{ views: LookView[] }>("/api/views/order", { method: "PUT", body: JSON.stringify({ keys }) }),
+  deleteView: (key: string) => request<{ deleted: string }>(`/api/views/${encodeURIComponent(key)}`, { method: "DELETE" }),
 
   getWorkPlan: (date?: string) => request<WorkPlan>(`/api/today/work${qs({ date })}`),
 

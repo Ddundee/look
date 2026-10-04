@@ -61,6 +61,7 @@ from app.services import calendar_sync
 from app.services import categories as categories_service
 from app.services import courses as courses_service
 from app.services import planning as planning_service
+from app.services import views as views_service
 from app.services import events as events_service
 from app.services import leetcode as leetcode_service
 from app.services import nutrition as nutrition_service
@@ -1359,6 +1360,29 @@ def update_category(category_key: str, name: Optional[str] = None, color: Option
         if category is None:
             return {"error": f"No category '{category_key}'. Use list_categories."}
         return CategoryRead.model_validate(categories_service.update_category(session, category, payload)).model_dump(mode="json")
+
+
+@mcp.tool()
+def list_views() -> dict:
+    """The user's views: Dashboard and Today (built in) and views they made
+    (e.g. 'School', 'Recruiting'), each with its widgets in order. A view's
+    name and widgets say what it's for: a 'School' view with upcoming
+    assignments and a schedule is where school planning lives. Read-only."""
+    with _session() as session:
+        items = [v.model_dump(mode="json") for v in views_service.list_views(session)]
+        return {"views": items, "count": len(items)}
+
+
+@mcp.tool()
+def get_view(key: str) -> dict:
+    """One view by key ('dashboard', 'today', or a custom view's key from
+    list_views): name, icon, and its widgets (type, size, visible, config).
+    Read-only."""
+    with _session() as session:
+        view = views_service.get_view(session, key)
+        if view is None:
+            return {"error": f"No view '{key}'. Use list_views."}
+        return view.model_dump(mode="json")
 
 
 @mcp.resource("tasks://today")

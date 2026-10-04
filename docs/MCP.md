@@ -239,6 +239,16 @@ Colors and styles are fixed keys, never CSS. See
 | `list_categories` | Categories with key, name, color and style |
 | `create_category` / `update_category` | Add, rename, restyle or archive a category |
 
+### Views
+
+Read-only: layouts are arranged in the web app (Customize).
+See [`VIEWS.md`](VIEWS.md).
+
+| Tool | Description |
+|---|---|
+| `list_views` | Dashboard, Today and custom views: name, icon, sidebar visibility, whether customized |
+| `get_view` | One view with its widgets (type, size, height, visible, config) |
+
 ## Resources (read-only)
 
 | URI | Contents |

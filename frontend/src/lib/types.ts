@@ -495,3 +495,27 @@ export interface WorkPlan {
   undated_total: number;
   remaining: number;
 }
+
+// ---- Views ---------------------------------------------------------------------
+
+export interface ViewWidget {
+  id: string;
+  type: string;
+  size: "quarter" | "third" | "half" | "two_thirds" | "full";
+  height: "short" | "medium" | "tall" | "full";
+  visible: boolean;
+  config: Record<string, unknown>;
+}
+
+export interface LookView {
+  key: string;
+  name: string;
+  icon: string;
+  kind: "system" | "custom";
+  show_in_nav: boolean;
+  sort_order: number;
+  archived: boolean;
+  /** System views: the layout differs from the app's default. */
+  customized: boolean;
+  widgets: ViewWidget[];
+}

@@ -21,7 +21,11 @@ import {
 } from "@phosphor-icons/react";
 import { api } from "@/lib/api";
 import { useNavCounts, type NavCounts } from "@/lib/useNavCounts";
+import type { LookView } from "@/lib/types";
+import { readSidebarCollapsed, setSidebarCollapsed, SIDEBAR_EVENT } from "@/lib/sidebar";
 import { ICON_BUTTON } from "@/lib/ui";
+import { navViews, useViews } from "@/lib/viewsStore";
+import { viewIcon } from "./views/icons";
 import ThemeToggle from "./ThemeToggle";
 import Toaster from "./Toaster";
 import UpdateChecker from "./UpdateChecker";
@@ -36,7 +40,6 @@ const NAV: { href: string; label: string; icon: Icon; count?: keyof NavCounts }[
   { href: "/completed", label: "Completed", icon: CheckCircleIcon },
 ];
 
-const COLLAPSED_KEY = "look-sidebar-collapsed";
 const SHORTCUT_LABEL = "⌘S";
 
 function BrandMark() {
@@ -53,6 +56,7 @@ function BrandMark() {
 function Sidebar({
   pathname,
   counts,
+  views,
   onNavigate,
   onLogout,
   collapsed = false,
@@ -60,6 +64,7 @@ function Sidebar({
 }: {
   pathname: string | null;
   counts: NavCounts | null;
+  views: LookView[];
   onNavigate?: () => void;
   onLogout: () => void;
   /** Icon-only rail (desktop). */
@@ -70,27 +75,10 @@ function Sidebar({
   const settingsActive = pathname?.startsWith("/settings");
   const toggleLabel = `${collapsed ? "Expand" : "Collapse"} sidebar (${SHORTCUT_LABEL})`;
 
-  return (
-    <div className="flex h-full flex-col">
-      <div className={`flex h-14 items-center ${collapsed ? "justify-center px-2" : "justify-between pl-4 pr-2.5"}`}>
-        {!collapsed && <BrandMark />}
-        {onToggleCollapsed && (
-          <button
-            type="button"
-            onClick={onToggleCollapsed}
-            aria-label={toggleLabel}
-            aria-expanded={!collapsed}
-            title={toggleLabel}
-            className={ICON_BUTTON}
-          >
-            <SidebarSimpleIcon className="h-[18px] w-[18px]" aria-hidden />
-          </button>
-        )}
-      </div>
+  const customViews = navViews(views);
 
-      <nav aria-label="Main" className={`flex-1 space-y-0.5 pt-2 ${collapsed ? "px-2" : "px-2.5"}`}>
-        {NAV.map((item) => {
-          const active = pathname?.startsWith(item.href);
+  function renderItem(item: { href: string; label: string; icon: Icon; count?: keyof NavCounts }) {
+          const active = pathname === item.href || (pathname?.startsWith(`${item.href}/`) ?? false);
           const count = item.count && counts ? counts[item.count] : 0;
           const overdue = item.count === "today" && counts ? counts.overdue : 0;
           const ItemIcon = item.icon;
@@ -133,7 +121,46 @@ function Sidebar({
               )}
             </Link>
           );
-        })}
+  }
+
+  return (
+    <div className="flex h-full flex-col">
+      <div className={`flex h-14 items-center ${collapsed ? "justify-center px-2" : "justify-between pl-4 pr-2.5"}`}>
+        {!collapsed && <BrandMark />}
+        {onToggleCollapsed && (
+          <button
+            type="button"
+            onClick={onToggleCollapsed}
+            aria-label={toggleLabel}
+            aria-expanded={!collapsed}
+            title={toggleLabel}
+            className={ICON_BUTTON}
+          >
+            <SidebarSimpleIcon className="h-[18px] w-[18px]" aria-hidden />
+          </button>
+        )}
+      </div>
+
+      <nav
+        aria-label="Main"
+        className={`scroll-area min-h-0 flex-1 space-y-0.5 overflow-y-auto pt-2 ${collapsed ? "px-2" : "px-2.5"}`}
+      >
+        {NAV.slice(0, 2).map(renderItem)}
+        {/* Views you made (Settings → Views & dashboards), between the
+            built-in pages, which always stay where they are. */}
+        {customViews.length > 0 && (
+          <div role="group" aria-label="Views" className="py-1.5">
+            {collapsed ? (
+              <div className="mx-2 mb-1.5 border-t border-line" aria-hidden />
+            ) : (
+              <p className="px-2.5 pb-1 pt-1 text-[11px] font-medium uppercase tracking-wide text-fg-faint">Views</p>
+            )}
+            <div className="space-y-0.5">
+              {customViews.map((v) => renderItem({ href: `/views/${v.key}`, label: v.name, icon: viewIcon(v.icon) }))}
+            </div>
+          </div>
+        )}
+        {NAV.slice(2).map(renderItem)}
       </nav>
 
       <div className={`space-y-0.5 pb-3 ${collapsed ? "px-2" : "px-2.5"}`}>
@@ -186,28 +213,21 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   // reads as a document: a narrower column that scrolls as a whole.
   const isDocument = pathname?.startsWith("/settings") ?? false;
   const counts = useNavCounts(!isLogin);
+  const { views } = useViews(!isLogin);
   const [drawerOpen, setDrawerOpen] = useState(false);
   // Desktop sidebar: full, or an icon rail that gives pages more width.
   // Remembered per browser; read after mount so server and client match.
   const [collapsed, setCollapsed] = useState(false);
   useEffect(() => {
-    try {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time read of a browser-only preference
-      setCollapsed(localStorage.getItem(COLLAPSED_KEY) === "1");
-    } catch {
-      // storage unavailable: start expanded
-    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time read of a browser-only preference
+    setCollapsed(readSidebarCollapsed());
+    // Settings → Appearance changes it too.
+    const onChange = (e: Event) => setCollapsed(Boolean((e as CustomEvent<boolean>).detail));
+    window.addEventListener(SIDEBAR_EVENT, onChange);
+    return () => window.removeEventListener(SIDEBAR_EVENT, onChange);
   }, []);
-  const toggleCollapsed = useCallback(() => {
-    setCollapsed((c) => {
-      try {
-        localStorage.setItem(COLLAPSED_KEY, c ? "0" : "1");
-      } catch {
-        // not persisted; still toggles for this visit
-      }
-      return !c;
-    });
-  }, []);
+  // Persists and broadcasts; the listener above (and Appearance) update.
+  const toggleCollapsed = useCallback(() => setSidebarCollapsed(!collapsed), [collapsed]);
 
   // Cmd+S / Ctrl+S toggles it (instead of the browser's "Save page").
   useEffect(() => {
@@ -264,6 +284,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <Sidebar
           pathname={pathname}
           counts={counts}
+          views={views}
           onLogout={handleLogout}
           collapsed={collapsed}
           onToggleCollapsed={toggleCollapsed}
@@ -287,6 +308,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <Sidebar
               pathname={pathname}
               counts={counts}
+              views={views}
               onNavigate={() => setDrawerOpen(false)}
               onLogout={handleLogout}
             />
@@ -318,7 +340,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <div
               className={
                 isDocument
-                  ? "mx-auto w-full max-w-3xl pb-16 pt-6 sm:pt-8"
+                  ? "mx-auto w-full max-w-5xl pb-16 pt-6 sm:pt-8"
                   : "mx-auto flex min-h-full w-full max-w-[100rem] flex-col py-4 sm:py-5 md:h-full"
               }
             >

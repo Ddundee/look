@@ -14,6 +14,7 @@ from app.models.nutrition import FoodEntry, NutritionTarget
 from app.models.planning import Category, Course, CourseLink
 from app.models.task import RecurrenceRule, Task
 from app.models.user import User
+from app.models.views import View
 
 __all__ = [
     "Category",
@@ -37,4 +38,5 @@ __all__ = [
     "RecurrenceRule",
     "Task",
     "User",
+    "View",
 ]
