@@ -21,7 +21,8 @@ import type { LookView } from "@/lib/types";
 import { BUTTON_GHOST_SM, BUTTON_PRIMARY, BUTTON_SECONDARY, CARD, FIELD, ICON_BUTTON, LABEL } from "@/lib/ui";
 import { moveItem } from "@/lib/views/layout";
 import { dropView, putView, setViews, useViews } from "@/lib/viewsStore";
-import { VIEW_ICONS, ViewIconGlyph } from "../views/icons";
+import IconPicker from "../views/IconPicker";
+import { ViewIconGlyph } from "../views/icons";
 import SectionHeader from "./SectionHeader";
 
 const PRESETS = [
@@ -30,28 +31,6 @@ const PRESETS = [
   { key: "school", title: "School", description: "Upcoming assignments, things to do and schedule." },
   { key: "overview", title: "Overview", description: "The same widgets as the Dashboard." },
 ];
-
-function IconPicker({ value, onChange }: { value: string; onChange: (icon: string) => void }) {
-  return (
-    <div role="radiogroup" aria-label="Icon" className="flex flex-wrap gap-1.5">
-      {Object.entries(VIEW_ICONS).map(([key, IconC]) => (
-        <button
-          key={key}
-          type="button"
-          role="radio"
-          aria-checked={value === key}
-          aria-label={key.replace("-", " ")}
-          onClick={() => onChange(key)}
-          className={`flex h-8 w-8 items-center justify-center rounded-lg border transition-colors ${
-            value === key ? "border-accent bg-accent-soft text-accent" : "border-line text-fg-muted hover:border-line-strong hover:text-fg"
-          }`}
-        >
-          <IconC weight={value === key ? "fill" : "regular"} className="h-4 w-4" aria-hidden />
-        </button>
-      ))}
-    </div>
-  );
-}
 
 function Switch({ checked, label, onChange }: { checked: boolean; label: string; onChange: () => void }) {
   return (

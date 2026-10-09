@@ -588,3 +588,27 @@ def test_views_migration_is_additive_and_guarded(db):
     migrations.downgrade(db, "0007_category_life_areas", allow_data_loss=True)
     assert "views" not in tables_in(db)
     assert snapshot(db, BASELINE_TABLES) == before
+
+
+def test_blocks_migration_is_additive_and_guarded(db):
+    with db.begin() as conn:
+        command.upgrade(migrations.alembic_config(conn), "0008_views")
+    with Session(db) as session:
+        seed_core(session)
+        seed_new_features(session)
+        session.commit()
+    before = snapshot(db, BASELINE_TABLES)
+    assert migrations.migrate(db) == migrations.head_revision()
+    assert snapshot(db, BASELINE_TABLES) == before
+    migrations.check_drift(db)
+
+    with db.begin() as conn:
+        conn.execute(sa.text(
+            "INSERT INTO blocks (id, name, icon, color, kind, config, created_at, updated_at) "
+            "VALUES ('b1', 'Pinned', 'book', 'blue', 'note', '{\"text\": \"hi\"}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+        ))
+    with pytest.raises(RuntimeError, match="allow-data-loss"):
+        migrations.downgrade(db, "0008_views")
+    migrations.downgrade(db, "0008_views", allow_data_loss=True)
+    assert "blocks" not in tables_in(db)
+    assert snapshot(db, BASELINE_TABLES) == before

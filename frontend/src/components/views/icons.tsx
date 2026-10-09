@@ -41,6 +41,6 @@ export function viewIcon(name: string): Icon {
 
 /** A view's icon as an element (picked by name, rendered by a stable
  * component). */
-export function ViewIconGlyph({ name, className, weight }: { name: string; className?: string; weight?: "regular" | "fill" }) {
+export function ViewIconGlyph({ name, className, weight }: { name: string; className?: string; weight?: "regular" | "fill" | "bold" }) {
   return createElement(viewIcon(name), { className, weight, "aria-hidden": true });
 }

@@ -10,7 +10,7 @@ from app import db
 from app import migrate as migrations
 from app.config import get_settings
 from app.logging_config import configure_logging
-from app.routers import auth, calendars, planning, views, events, leetcode, nutrition, recurring, system, tasks, today
+from app.routers import auth, blocks, calendars, planning, views, events, leetcode, nutrition, recurring, system, tasks, today
 from app.seed import seed_demo_data
 from app.services import calendar_sync
 from app.services.auth import ensure_admin_user
@@ -80,6 +80,7 @@ app.include_router(events.router)
 app.include_router(calendars.router)
 app.include_router(planning.router)
 app.include_router(views.router)
+app.include_router(blocks.router)
 app.include_router(leetcode.router)
 app.include_router(system.router)
 

@@ -474,7 +474,8 @@ export interface Course extends CourseSummary {
 
 /** A task or an imported assignment: one list of things to do. */
 export interface WorkItem {
-  kind: "task" | "assignment";
+  /** "event": a plain event (only in smart lists). */
+  kind: "task" | "assignment" | "event";
   id: string;
   title: string;
   done: boolean;
@@ -518,4 +519,44 @@ export interface LookView {
   /** System views: the layout differs from the app's default. */
   customized: boolean;
   widgets: ViewWidget[];
+}
+
+// ---- blocks (backend app.services.blocks) ---------------------------------------
+
+export type BlockKind = "smart_list" | "note";
+export type DueWindow = "any" | "overdue" | "today" | "next_7" | "next_14" | "next_30" | "this_week" | "no_date";
+
+export interface SmartListConfig {
+  show: ("tasks" | "assignments" | "events")[];
+  categories: string[];
+  courses: string[];
+  priorities: TaskPriority[];
+  tags: string[];
+  search: string;
+  due: DueWindow;
+  status: "open" | "done" | "all";
+  sort: "due" | "priority" | "title";
+  limit: number;
+  group_by_day: boolean;
+}
+
+export interface NoteConfig {
+  text: string;
+}
+
+export interface Block {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  kind: BlockKind;
+  config: SmartListConfig | NoteConfig;
+  /** Views showing it. */
+  used_in: { key: string; name: string }[];
+  updated_at: string;
+}
+
+export interface BlockItems {
+  items: WorkItem[];
+  total: number;
 }

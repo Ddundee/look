@@ -2,6 +2,7 @@
 // settings sidebar and the overview.
 import {
   CalendarDotsIcon,
+  CubeIcon,
   GraduationCapIcon,
   PackageIcon,
   PaintBrushIcon,
@@ -24,6 +25,7 @@ export const SETTINGS_GROUPS: { label: string; sections: SettingsSection[] }[] =
     sections: [
       { slug: "appearance", title: "Appearance", icon: PaintBrushIcon, blurb: "Theme and sidebar" },
       { slug: "views", title: "Views & dashboards", icon: SquaresFourIcon, blurb: "Dashboard, Today and your own views" },
+      { slug: "blocks", title: "Blocks", icon: CubeIcon, blurb: "Smart lists and notes for your views" },
       { slug: "courses", title: "Courses", icon: GraduationCapIcon, blurb: "Your classes and their colors" },
       { slug: "categories", title: "Categories", icon: TagIcon, blurb: "Life areas for tasks and events" },
     ],

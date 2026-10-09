@@ -16,11 +16,12 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Literal, Optional, Sequence, Type
 
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import func
 from sqlmodel import Session, select
 
 from app.models.views import View
+from app.services import blocks as blocks_service
 from app.schemas import ViewCreate, ViewRead, ViewUpdate, WidgetInstance, WidgetTypeRead
 from app.utils import utcnow
 
@@ -59,6 +60,13 @@ class UpcomingConfig(BaseModel):
     days: Literal[3, 7, 14] = 7
 
 
+class BlockRefConfig(BaseModel):
+    """A block from your library (app.services.blocks), placed by id."""
+
+    model_config = ConfigDict(extra="forbid")
+    block_id: str = Field(default="", max_length=64)
+
+
 @dataclass(frozen=True)
 class WidgetSpec:
     title: str
@@ -89,6 +97,9 @@ WIDGETS: Dict[str, WidgetSpec] = {
                              "quarter", "medium", sizes=("quarter", "third", "half")),
     "leetcode_summary": WidgetSpec("LeetCode", "Solved today and this week against your goals, and your streak.",
                                    "third", "short", sizes=("quarter", "third", "half", "full"), heights=("short", "medium")),
+    # A smart list or note from your blocks library; any number per view.
+    "block": WidgetSpec("Block", "A smart list or note you built. Edit it once, it changes on every view.",
+                        "third", "medium", multiple=True, config=BlockRefConfig),
 }
 
 
@@ -158,7 +169,7 @@ def validate_layout(raw: Sequence[Any]) -> List[Dict[str, Any]]:
     if len(raw) > MAX_WIDGETS:
         raise ValueError(f"A view can have at most {MAX_WIDGETS} widgets.")
     out: List[Dict[str, Any]] = []
-    ids, singles = set(), set()
+    ids, singles, blocks = set(), set(), set()
     for index, item in enumerate(raw, start=1):
         try:
             widget = item if isinstance(item, WidgetInstance) else WidgetInstance.model_validate(item)
@@ -182,6 +193,12 @@ def validate_layout(raw: Sequence[Any]) -> List[Dict[str, Any]]:
         except ValidationError as exc:
             err = exc.errors()[0]
             raise ValueError(f"{spec.title}: {'.'.join(map(str, err['loc']))}: {err['msg']}") from None
+        if widget.type == "block":
+            if not config["block_id"]:
+                raise ValueError(f"Widget {index}: choose which block to show.")
+            if config["block_id"] in blocks:
+                raise ValueError("A block can only be placed once per view.")
+            blocks.add(config["block_id"])
         ids.add(widget.id)
         out.append({"id": widget.id, "type": widget.type, "size": widget.size, "height": widget.height,
                     "visible": widget.visible, "config": config})
@@ -291,6 +308,9 @@ def update_view(session: Session, key: str, changes: ViewUpdate) -> ViewRead:
 
 def save_layout(session: Session, key: str, widgets: Sequence[Any]) -> ViewRead:
     layout = validate_layout(widgets)
+    placed = set(blocks_service.block_ids_in(layout))
+    if placed - blocks_service.existing_ids(session, placed):
+        raise ValueError("A block on this view no longer exists. Remove it and try again.")
     if key in SYSTEM_VIEWS:
         row = _row(session, key)
         if row is None:

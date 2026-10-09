@@ -1,5 +1,10 @@
 import type {
+  Block,
+  BlockItems,
+  BlockKind,
   LookView,
+  NoteConfig,
+  SmartListConfig,
   ViewWidget,
   Category,
   Course,
@@ -245,6 +250,16 @@ export const api = {
   reorderViews: (keys: string[]) =>
     request<{ views: LookView[] }>("/api/views/order", { method: "PUT", body: JSON.stringify({ keys }) }),
   deleteView: (key: string) => request<{ deleted: string }>(`/api/views/${encodeURIComponent(key)}`, { method: "DELETE" }),
+
+  listBlocks: () => request<{ blocks: Block[] }>("/api/blocks"),
+  createBlock: (payload: { name: string; kind: BlockKind; icon?: string; color?: string; config?: Partial<SmartListConfig> | NoteConfig }) =>
+    request<Block>("/api/blocks", { method: "POST", body: JSON.stringify(payload) }),
+  updateBlock: (id: string, payload: { name?: string; icon?: string; color?: string; config?: SmartListConfig | NoteConfig }) =>
+    request<Block>(`/api/blocks/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  deleteBlock: (id: string) => request<void>(`/api/blocks/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  getBlockItems: (id: string) => request<BlockItems>(`/api/blocks/${encodeURIComponent(id)}/items`),
+  previewSmartList: (config: SmartListConfig) =>
+    request<BlockItems>("/api/blocks/preview", { method: "POST", body: JSON.stringify(config) }),
 
   getWorkPlan: (date?: string) => request<WorkPlan>(`/api/today/work${qs({ date })}`),
 

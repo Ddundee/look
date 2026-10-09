@@ -820,7 +820,7 @@ class WorkItem(BaseModel):
     are the records themselves, not copies, so completing one goes to the
     Task API or the event's complete/uncomplete."""
 
-    kind: Literal["task", "assignment"]
+    kind: Literal["task", "assignment", "event"]  # "event": a plain event (smart lists)
     id: str  # task id or event id
     title: str
     done: bool
@@ -945,3 +945,79 @@ class WidgetTypeRead(BaseModel):
     default_height: str
     multiple: bool
     config_defaults: Dict[str, Any]
+
+
+# ---- blocks (app.services.blocks) ------------------------------------------------
+
+BlockKind = Literal["smart_list", "note"]
+DueWindow = Literal["any", "overdue", "today", "next_7", "next_14", "next_30", "this_week", "no_date"]
+
+
+class SmartListConfig(BaseModel):
+    """What a smart list shows. Filters apply where the field exists:
+    courses narrow it to assignments and events (tasks have no course);
+    priorities and tags narrow it to tasks."""
+
+    model_config = ConfigDict(extra="forbid")
+    show: List[Literal["tasks", "assignments", "events"]] = Field(
+        default_factory=lambda: ["tasks", "assignments"], min_length=1, max_length=3
+    )
+    categories: List[str] = Field(default_factory=list, max_length=30)
+    courses: List[str] = Field(default_factory=list, max_length=30)
+    priorities: List[TaskPriority] = Field(default_factory=list, max_length=4)
+    tags: List[str] = Field(default_factory=list, max_length=10)
+    search: str = Field(default="", max_length=100)
+    due: DueWindow = "any"
+    status: Literal["open", "done", "all"] = "open"
+    sort: Literal["due", "priority", "title"] = "due"
+    limit: int = Field(default=20, ge=1, le=50)
+    group_by_day: bool = False
+
+
+class NoteConfig(BaseModel):
+    """A note's text: a small Markdown subset (headings, lists, - [ ]
+    checklists, **bold**, *italic*, `code`, links), rendered as text, never
+    as HTML."""
+
+    model_config = ConfigDict(extra="forbid")
+    text: str = Field(default="", max_length=10_000)
+
+
+class BlockCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=40)
+    icon: Optional[str] = None
+    color: Optional[str] = None
+    kind: BlockKind
+    config: Dict[str, Any] = Field(default_factory=dict)
+
+
+class BlockUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=40)
+    icon: Optional[str] = None
+    color: Optional[str] = None
+    config: Optional[Dict[str, Any]] = None
+
+
+class BlockPlacement(BaseModel):
+    key: str
+    name: str
+
+
+class BlockRead(BaseModel):
+    id: str
+    name: str
+    icon: str
+    color: str
+    kind: BlockKind
+    config: Dict[str, Any]
+    used_in: List[BlockPlacement]  # views showing it
+    updated_at: datetime
+
+
+class BlockList(BaseModel):
+    blocks: List[BlockRead]
+
+
+class BlockItems(BaseModel):
+    items: List[WorkItem]
+    total: int  # matches before the limit

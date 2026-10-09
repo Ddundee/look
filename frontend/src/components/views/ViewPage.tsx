@@ -14,19 +14,30 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, rectSortingStrategy, sortableKeyboardCoordinates, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ArrowCounterClockwiseIcon, CheckIcon, PencilSimpleIcon, PlusIcon, SquaresFourIcon } from "@phosphor-icons/react";
+import {
+  ArrowCounterClockwiseIcon,
+  CheckIcon,
+  ListChecksIcon,
+  NoteIcon,
+  PencilSimpleIcon,
+  PlusIcon,
+  SquaresFourIcon,
+} from "@phosphor-icons/react";
 import { api } from "@/lib/api";
 import { formatDateLong, todayIso } from "@/lib/format";
 import { toast, toastError } from "@/lib/toast";
-import type { LookView, Occurrence, ViewWidget } from "@/lib/types";
+import { refreshBlocks, useBlocks } from "@/lib/blocksStore";
+import { lookVars, toColor } from "@/lib/palette";
+import type { Block, BlockKind, LookView, Occurrence, ViewWidget } from "@/lib/types";
 import { useNow } from "@/lib/useNow";
-import { BUTTON_GHOST_SM, BUTTON_PRIMARY, BUTTON_SECONDARY } from "@/lib/ui";
+import { BUTTON_GHOST_SM, BUTTON_PRIMARY, BUTTON_SECONDARY, ICON_BUTTON } from "@/lib/ui";
 import {
   addableTypes,
   addWidget,
   moveById,
   moveWidget,
   normalizeLayout,
+  placeBlock,
   removeWidget,
   sameLayout,
   updateWidget,
@@ -38,6 +49,9 @@ import { putView, refreshViews, useViews } from "@/lib/viewsStore";
 import Dialog from "@/components/Dialog";
 import { EmptyState, ErrorState, Page, PageHeader, TaskListSkeleton } from "@/components/PageParts";
 import EventEditor, { type EditorTarget } from "@/components/events/EventEditor";
+import BlockBody from "@/components/blocks/BlockBody";
+import BlockEditor from "@/components/blocks/BlockEditor";
+import { ViewIconGlyph, viewIcon } from "./icons";
 import { WIDGET_VIEWS } from "./registry";
 import WidgetShell, { type EditControls } from "./WidgetShell";
 import { ViewContext } from "./widgets";
@@ -67,17 +81,35 @@ function SortableWidget({
   editing,
   reducedMotion,
   controls,
+  block,
+  onEditBlock,
 }: {
   widget: Widget;
   editing: boolean;
   reducedMotion: boolean;
   controls: Omit<EditControls, "handleProps">;
+  /** For a block widget: the library block it shows, if it still exists. */
+  block?: Block;
+  onEditBlock: (block: Block) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: widget.id, disabled: !editing });
   const type = widget.type as WidgetType;
   const def = WIDGET_DEFS[type];
   const view = WIDGET_VIEWS[type];
   const Body = view.component;
+  const isBlock = type === "block";
+  const blockProps = isBlock
+    ? {
+        title: block?.name ?? "Deleted block",
+        icon: block ? viewIcon(block.icon) : view.icon,
+        iconStyle: block ? (lookVars({ color: toColor(block.color) }) as React.CSSProperties) : undefined,
+        action: block && (
+          <button type="button" onClick={() => onEditBlock(block)} aria-label={`Edit ${block.name}`} title="Edit block" className={ICON_BUTTON}>
+            <PencilSimpleIcon className="h-3.5 w-3.5" aria-hidden />
+          </button>
+        ),
+      }
+    : {};
   return (
     <div
       ref={setNodeRef}
@@ -90,18 +122,72 @@ function SortableWidget({
         link={view.link}
         widget={widget}
         edit={editing ? { ...controls, handleProps: { ...attributes, ...listeners } } : undefined}
+        {...blockProps}
       >
-        <Body config={widget.config} />
+        {isBlock ? <BlockBody config={widget.config} onEdit={block ? () => onEditBlock(block) : undefined} /> : <Body config={widget.config} />}
       </WidgetShell>
     </div>
   );
 }
 
-function AddWidgetDialog({ widgets, onAdd, onClose }: { widgets: Widget[]; onAdd: (t: WidgetType) => void; onClose: () => void }) {
-  const hidden = new Set(widgets.filter((w) => !w.visible).map((w) => w.type));
+function AddWidgetDialog({
+  widgets,
+  onAdd,
+  onPlace,
+  onNewBlock,
+  onClose,
+}: {
+  widgets: Widget[];
+  onAdd: (t: WidgetType) => void;
+  onPlace: (blockId: string) => void;
+  onNewBlock: (kind: BlockKind) => void;
+  onClose: () => void;
+}) {
+  const hidden = new Set(widgets.filter((w) => !w.visible && w.type !== "block").map((w) => w.type));
   const types = [...new Set([...addableTypes(widgets), ...[...hidden].filter(isWidgetType)])];
+  const { blocks } = useBlocks();
+  const shownBlocks = new Set(widgets.filter((w) => w.type === "block" && w.visible).map((w) => String(w.config.block_id)));
+  const placeable = blocks.filter((b) => !shownBlocks.has(b.id));
   return (
     <Dialog title="Add widget" size="sm" hint={false} onClose={onClose} onSubmit={(e) => e.preventDefault()} footer={<button type="button" onClick={onClose} className={BUTTON_SECONDARY}>Close</button>}>
+      <section aria-label="Your blocks" className="mb-4 space-y-2">
+        <h3 className="text-[11px] font-medium uppercase tracking-wide text-fg-faint">Your blocks</h3>
+        {placeable.length > 0 && (
+          <ul className="-mx-2 space-y-0.5">
+            {placeable.map((b) => (
+              <li key={b.id}>
+                <button
+                  type="button"
+                  onClick={() => onPlace(b.id)}
+                  className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-surface-2/70"
+                >
+                  <span className="look-fill flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" data-style="soft" style={lookVars({ color: toColor(b.color) })}>
+                    <ViewIconGlyph name={b.icon} className="look-ink h-4 w-4" weight="bold" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium text-fg">{b.name}</span>
+                    <span className="block truncate text-xs text-fg-muted">
+                      {b.kind === "note" ? "Note" : "Smart list"}
+                      {b.used_in.length > 0 && ` · on ${b.used_in.map((v) => v.name).join(", ")}`}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => onNewBlock("smart_list")} className={BUTTON_SECONDARY}>
+            <ListChecksIcon className="h-4 w-4" aria-hidden />
+            New smart list
+          </button>
+          <button type="button" onClick={() => onNewBlock("note")} className={BUTTON_SECONDARY}>
+            <NoteIcon className="h-4 w-4" aria-hidden />
+            New note
+          </button>
+        </div>
+      </section>
+      <h3 className="mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-faint">Widgets</h3>
       {types.length === 0 ? (
         <p className="text-sm text-fg-muted">Every widget is already on this view.</p>
       ) : (
@@ -210,6 +296,9 @@ export default function ViewPage({ viewKey }: { viewKey: string }) {
   const [saving, setSaving] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [editor, setEditor] = useState<EditorTarget | null>(null);
+  // Making or editing a library block; `place` puts a new one on this view.
+  const [blockEditor, setBlockEditor] = useState<{ block?: Block; kind?: BlockKind; place?: boolean } | null>(null);
+  const { blocks } = useBlocks();
   const reducedMotion = usePrefersReducedMotion();
   const now = useNow();
   const editing = draft !== null;
@@ -283,6 +372,7 @@ export default function ViewPage({ viewKey }: { viewKey: string }) {
     try {
       putView(await api.saveViewLayout(view.key, draft as ViewWidget[]));
       setDraft(null);
+      void refreshBlocks(); // where each block is shown changed
       toast("Layout saved");
     } catch (err) {
       toastError(err, "Couldn't save the layout");
@@ -382,14 +472,25 @@ export default function ViewPage({ viewKey }: { viewKey: string }) {
                     widget={w}
                     editing={editing}
                     reducedMotion={reducedMotion}
+                    block={w.type === "block" ? blocks.find((b) => b.id === w.config.block_id) : undefined}
+                    onEditBlock={(block) => setBlockEditor({ block })}
                     controls={{
                       index: i,
                       count: shown.length,
-                      canRemove: !isSystem,
+                      // Built-in widgets on Dashboard/Today can only be hidden; blocks you placed can go.
+                      canRemove: !isSystem || w.type === "block",
                       onMove: (to) => setDraft((d) => moveWidget(d ?? stored, i, to)),
                       onChange: (patch) => setDraft((d) => updateWidget(d ?? stored, w.id, patch)),
                       onRemove: () => setDraft((d) => removeWidget(d ?? stored, w.id)),
-                      onConfigure: WIDGET_DEFS[w.type as WidgetType].config.length ? () => setConfiguring(w) : undefined,
+                      onConfigure:
+                        w.type === "block"
+                          ? () => {
+                              const block = blocks.find((b) => b.id === w.config.block_id);
+                              if (block) setBlockEditor({ block });
+                            }
+                          : WIDGET_DEFS[w.type as WidgetType].config.length
+                            ? () => setConfiguring(w)
+                            : undefined,
                     }}
                   />
                 ))}
@@ -406,6 +507,14 @@ export default function ViewPage({ viewKey }: { viewKey: string }) {
               setDraft((d) => addWidget(d ?? stored, t));
               setAdding(false);
             }}
+            onPlace={(id) => {
+              setDraft((d) => placeBlock(d ?? stored, id));
+              setAdding(false);
+            }}
+            onNewBlock={(kind) => {
+              setAdding(false);
+              setBlockEditor({ kind, place: true });
+            }}
           />
         )}
         {configuring && (
@@ -419,6 +528,16 @@ export default function ViewPage({ viewKey }: { viewKey: string }) {
           />
         )}
         {editor && <EventEditor target={editor} onClose={() => setEditor(null)} />}
+        {blockEditor && (
+          <BlockEditor
+            block={blockEditor.block}
+            kind={blockEditor.kind}
+            onClose={() => setBlockEditor(null)}
+            onSaved={(saved) => {
+              if (blockEditor.place) setDraft((d) => placeBlock(d ?? stored, saved.id));
+            }}
+          />
+        )}
       </Page>
     </ViewContext.Provider>
   );

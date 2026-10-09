@@ -12,7 +12,7 @@ import TaskRow from "./TaskRow";
 
 /** One row of work: a Task (the usual task row) or an imported assignment
  * (checkbox, course, due time). Completion goes to whichever owns it. */
-function WorkRow({
+export function WorkRow({
   item,
   index,
   onChanged,
@@ -29,6 +29,7 @@ function WorkRow({
     return <TaskRow task={item.task as Task} index={index} onUpdated={onChanged} onDeleted={onChanged} />;
   }
   if (!item.occurrence) return null;
+  if (item.kind === "event") return <EventRow item={item} occ={item.occurrence} index={index} onOpen={onOpenAssignment} />;
   return <AssignmentRow item={item} occ={item.occurrence} index={index} onOpen={onOpenAssignment} overdue={overdue} />;
 }
 
@@ -81,6 +82,35 @@ function AssignmentRow({
               {due}
             </span>
           )}
+        </div>
+      </div>
+    </li>
+  );
+}
+
+/** A plain event (smart lists): when, title and its course or category. */
+function EventRow({ item, occ, index, onOpen }: { item: WorkItem; occ: Occurrence; index: number; onOpen: (occ: Occurrence) => void }) {
+  const look = useLook(occ);
+  return (
+    <li
+      style={{ "--i": index } as React.CSSProperties}
+      className="group relative flex items-start gap-3 rounded-lg px-3 py-2.5 transition-colors duration-150 hover:bg-surface-2/70 focus-within:bg-surface-2/70"
+    >
+      <ItemEdge look={look} />
+      <div className="min-w-0 flex-1">
+        <button
+          type="button"
+          onClick={() => onOpen(occ)}
+          className="block max-w-full text-left text-sm leading-5 text-fg [overflow-wrap:anywhere] hover:underline hover:decoration-line-strong hover:underline-offset-4"
+        >
+          {titleWithoutCourse(item.title, item.course)}
+        </button>
+        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-fg-muted">
+          {item.course ? <CourseBadge course={item.course} /> : <span>{look.label}</span>}
+          <span className="font-mono tabular-nums">
+            {item.due_date ? `${formatDate(item.due_date)}, ` : ""}
+            {occ.all_day ? "all day" : timeLabel(occ.start_at)}
+          </span>
         </div>
       </div>
     </li>
