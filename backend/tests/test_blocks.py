@@ -7,7 +7,7 @@ import pytest
 from sqlmodel import select
 
 import mcp_server.server as mcp_server
-from app.models import Task, View
+from app.models import Block, Task, View
 from app.schemas import BlockCreate, BlockUpdate, CourseCreate, EventCreate, TaskCreate
 from app.services import blocks as blocks_svc
 from app.services import courses as courses_svc
@@ -93,6 +93,17 @@ def test_block_widget_rules(session):
     other = note(session, name="Other")
     saved = views_svc.save_layout(session, "today", [block_widget(b.id, "a"), block_widget(other.id, "b")])
     assert len(saved.widgets) == 2  # many blocks per view
+
+
+def test_stale_stored_config_falls_back_to_defaults(session):
+    b = smart(session, show=["tasks"])
+    row = session.get(Block, b.id)
+    row.config = {**row.config, "retired_filter": True}  # saved by an older version
+    session.add(row)
+    session.commit()
+    tasks_svc.create_task(session, TaskCreate(title="Still listed"))
+    assert blocks_svc.get_block(session, b.id).config["show"] == ["tasks", "assignments"]  # defaults
+    assert "Still listed" in titles(blocks_svc.block_items(session, b.id))
 
 
 def test_delete_removes_placements_never_data(session):

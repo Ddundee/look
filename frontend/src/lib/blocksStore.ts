@@ -39,6 +39,12 @@ export function putBlock(block: Block) {
   emit({ ...state, blocks: exists ? state.blocks.map((b) => (b.id === block.id ? block : b)) : [...state.blocks, block] });
 }
 
+/** Replace a block only if the store still holds `expected` (that exact
+ * object): a late or failed save must not undo a newer optimistic edit. */
+export function putBlockIf(expected: Block, next: Block) {
+  if (state.blocks.find((b) => b.id === expected.id) === expected) putBlock(next);
+}
+
 export function dropBlock(id: string) {
   emit({ ...state, blocks: state.blocks.filter((b) => b.id !== id) });
 }

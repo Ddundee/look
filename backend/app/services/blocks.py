@@ -100,11 +100,17 @@ def _placements(session: Session) -> Dict[str, List[BlockPlacement]]:
     return used
 
 
-def _read(block: Block, used: Dict[str, List[BlockPlacement]]) -> BlockRead:
+def _stored_config(block: Block) -> Dict[str, Any]:
+    """A block's config as stored, or the kind's defaults if it no longer
+    validates (saved before a field changed)."""
     try:
-        config = validate_config(block.kind, block.config)
-    except ValueError:  # stored before a field changed: fall back to defaults
-        config = KINDS[block.kind]().model_dump(mode="json")
+        return validate_config(block.kind, block.config)
+    except ValueError:
+        return KINDS[block.kind]().model_dump(mode="json")
+
+
+def _read(block: Block, used: Dict[str, List[BlockPlacement]]) -> BlockRead:
+    config = _stored_config(block)
     return BlockRead(id=block.id, name=block.name, icon=block.icon, color=block.color, kind=block.kind,
                      config=config, used_in=used.get(block.id, []), updated_at=block.updated_at)
 
@@ -309,4 +315,4 @@ def block_items(session: Session, block_id: str) -> Optional[BlockItems]:
         return None
     if block.kind != "smart_list":
         raise ValueError("Only smart lists have items.")
-    return evaluate(session, validate_config(block.kind, block.config))
+    return evaluate(session, _stored_config(block))

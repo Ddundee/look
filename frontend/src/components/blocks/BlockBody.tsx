@@ -4,7 +4,7 @@ import { useContext, useMemo } from "react";
 import { PencilSimpleIcon } from "@phosphor-icons/react";
 import { api } from "@/lib/api";
 import { checkProgress, parseNote, toggleCheck } from "@/lib/blocks/markdown";
-import { putBlock, useBlocks } from "@/lib/blocksStore";
+import { putBlock, putBlockIf, useBlocks } from "@/lib/blocksStore";
 import { formatDateLong } from "@/lib/format";
 import { toastError } from "@/lib/toast";
 import type { Block, NoteConfig, SmartListConfig, WorkItem } from "@/lib/types";
@@ -83,12 +83,15 @@ function NoteBody({ block, onEdit }: { block: Block; onEdit?: () => void }) {
   }
   async function toggle(line: number) {
     const next = toggleCheck(text, line);
-    // Show it now; every view with this note updates from the store.
-    putBlock({ ...block, config: { text: next } });
+    // Show it now; every view with this note updates from the store. The
+    // reply (or a rollback) only lands if no newer tick happened meanwhile;
+    // a newer one sends the full text, so it settles the note itself.
+    const optimistic: Block = { ...block, config: { text: next } };
+    putBlock(optimistic);
     try {
-      putBlock(await api.updateBlock(block.id, { config: { text: next } }));
+      putBlockIf(optimistic, await api.updateBlock(block.id, { config: { text: next } }));
     } catch (err) {
-      putBlock(block);
+      putBlockIf(optimistic, block);
       toastError(err, "Couldn't update the note");
     }
   }
