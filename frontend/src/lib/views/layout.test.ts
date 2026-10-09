@@ -6,6 +6,8 @@ import {
   moveById,
   moveWidget,
   normalizeLayout,
+  placeBlock,
+  placedBlocks,
   removeWidget,
   sameLayout,
   updateWidget,
@@ -18,7 +20,7 @@ const w = (type: string, id = type, extra: Partial<Widget> = {}): Widget =>
   ({ id, type, size: "half", height: "medium", visible: true, config: {}, ...extra }) as Widget;
 
 test("registry: every widget's defaults are among its allowed values", () => {
-  assert.equal(WIDGET_TYPES.length, 8);
+  assert.equal(WIDGET_TYPES.length, 9);
   for (const def of Object.values(WIDGET_DEFS)) {
     assert.ok(def.sizes.includes(def.defaultSize), def.type);
     assert.ok(def.heights.includes(def.defaultHeight), def.type);
@@ -72,4 +74,18 @@ test("sameLayout notices any change", () => {
   const a = [w("schedule")];
   assert.ok(sameLayout(a, [w("schedule")]));
   assert.ok(!sameLayout(a, updateWidget(a, "schedule", { size: "full" })));
+});
+
+test("blocks: placed by id, any number per view, once each, never in the widget list", () => {
+  let ws = placeBlock([w("things_to_do")], "b1", () => "x");
+  ws = placeBlock(ws, "b2", () => "y");
+  assert.deepEqual(ws.map((x) => x.id), ["things_to_do", "block-x", "block-y"]);
+  assert.deepEqual([...placedBlocks(ws)], ["b1", "b2"]);
+  const hidden = ws.map((x) => (x.id === "block-x" ? { ...x, visible: false } : x));
+  assert.equal(placeBlock(hidden, "b1").length, 3); // placing again shows it
+  assert.ok(placeBlock(hidden, "b1").every((x) => x.visible));
+  assert.ok(!addableTypes(ws).includes("block"));
+  // normalize keeps the block id and drops blocks without one
+  const out = normalizeLayout([...ws, w("block", "z")]);
+  assert.deepEqual(out.map((x) => x.config.block_id), [undefined, "b1", "b2"]);
 });

@@ -46,7 +46,7 @@ function useDataVersion(): number {
 }
 
 /** Loads data for a widget, keeping the last good data while reloading. */
-function useLive<T>(load: () => Promise<T>, deps: unknown[]) {
+export function useLive<T>(load: () => Promise<T>, deps: unknown[]) {
   const version = useDataVersion();
   const [state, setState] = useState<{ data: T | null; error: string | null }>({ data: null, error: null });
   const [attempt, setAttempt] = useState(0);
@@ -69,7 +69,7 @@ function useLive<T>(load: () => Promise<T>, deps: unknown[]) {
 }
 
 /** Today's date in the app timezone once known, else the browser's. */
-function useToday(): string {
+export function useToday(): string {
   const now = useNow();
   return now ? now.slice(0, 10) : todayIso();
 }

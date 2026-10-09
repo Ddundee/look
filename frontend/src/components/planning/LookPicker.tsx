@@ -19,7 +19,7 @@ import { ItemEdge, LookMark } from "../look/Look";
 
 const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
 
-function Swatch({ color, selected, onPick }: { color: ColorKey; selected: boolean; onPick: () => void }) {
+export function Swatch({ color, selected, onPick }: { color: ColorKey; selected: boolean; onPick: () => void }) {
   return (
     <button
       type="button"

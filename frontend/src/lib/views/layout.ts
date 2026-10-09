@@ -25,9 +25,14 @@ export function normalizeLayout(widgets: Widget[]): Widget[] {
       if (singles.has(w.type)) continue;
       singles.add(w.type);
     }
-    ids.add(w.id);
     const config: Record<string, unknown> = {};
     for (const field of def.config) config[field.key] = w.config?.[field.key] ?? field.default;
+    if (w.type === "block") {
+      // A block is only its library id.
+      if (typeof w.config?.block_id !== "string" || !w.config.block_id) continue;
+      config.block_id = w.config.block_id;
+    }
+    ids.add(w.id);
     out.push({
       id: w.id,
       type: w.type,
@@ -60,7 +65,21 @@ export function moveById(widgets: Widget[], activeId: string, overId: string): W
 /** Types that can still be added (single-instance ones that aren't there yet). */
 export function addableTypes(widgets: Widget[]): WidgetType[] {
   const present = new Set(widgets.map((w) => w.type));
-  return (Object.keys(WIDGET_DEFS) as WidgetType[]).filter((t) => WIDGET_DEFS[t].multiple || !present.has(t));
+  return (Object.keys(WIDGET_DEFS) as WidgetType[]).filter((t) => t !== "block" && (WIDGET_DEFS[t].multiple || !present.has(t)));
+}
+
+/** Block ids placed on a layout. */
+export function placedBlocks(widgets: Widget[]): Set<string> {
+  return new Set(widgets.filter((w) => w.type === "block").map((w) => String(w.config.block_id)));
+}
+
+/** Place a library block on the view (once per view; placing it again
+ * shows it if hidden). */
+export function placeBlock(widgets: Widget[], blockId: string, makeId: () => string = () => Math.random().toString(36).slice(2, 8)): Widget[] {
+  const existing = widgets.find((w) => w.type === "block" && w.config.block_id === blockId);
+  if (existing) return widgets.map((w) => (w.id === existing.id ? { ...w, visible: true } : w));
+  const def = WIDGET_DEFS.block;
+  return [...widgets, { id: `block-${makeId()}`, type: "block", size: def.defaultSize, height: def.defaultHeight, visible: true, config: { block_id: blockId } }];
 }
 
 export function addWidget(widgets: Widget[], type: WidgetType, makeId: () => string = () => Math.random().toString(36).slice(2, 8)): Widget[] {

@@ -10,7 +10,8 @@ export type WidgetType =
   | "week_preview"
   | "nutrition_summary"
   | "week_stats"
-  | "leetcode_summary";
+  | "leetcode_summary"
+  | "block";
 
 export const SIZES = ["quarter", "third", "half", "two_thirds", "full"] as const;
 export type WidgetSize = (typeof SIZES)[number];
@@ -75,6 +76,10 @@ export const WIDGET_DEFS: Record<WidgetType, WidgetDef> = {
     sizes: ["quarter", "third", "half"], defaultSize: "quarter", defaultHeight: "medium" },
   leetcode_summary: { ...all, type: "leetcode_summary", title: "LeetCode", description: "Solved today and this week, and your streak.",
     sizes: ["quarter", "third", "half", "full"], defaultSize: "third", heights: ["short", "medium"], defaultHeight: "short" },
+  // A smart list or note from the blocks library, placed by id; added from
+  // "Your blocks" in Add widget, never from the widget list.
+  block: { ...all, type: "block", title: "Block", description: "A smart list or note you built.",
+    defaultSize: "third", defaultHeight: "medium", multiple: true },
 };
 
 export const WIDGET_TYPES = Object.keys(WIDGET_DEFS) as WidgetType[];

@@ -61,6 +61,7 @@ from app.services import calendar_sync
 from app.services import categories as categories_service
 from app.services import courses as courses_service
 from app.services import planning as planning_service
+from app.services import blocks as blocks_service
 from app.services import views as views_service
 from app.services import events as events_service
 from app.services import leetcode as leetcode_service
@@ -1383,6 +1384,31 @@ def get_view(key: str) -> dict:
         if view is None:
             return {"error": f"No view '{key}'. Use list_views."}
         return view.model_dump(mode="json")
+
+
+@mcp.tool()
+def list_blocks() -> dict:
+    """The user's blocks library: smart lists (saved filters over tasks,
+    assignments and events, e.g. 'High-priority CS 3214 this week') and
+    notes, with which views show each. Read-only."""
+    with _session() as session:
+        items = [b.model_dump(mode="json") for b in blocks_service.list_blocks(session)]
+        return {"blocks": items, "count": len(items)}
+
+
+@mcp.tool()
+def get_block_items(block_id: str) -> dict:
+    """What a smart list (id from list_blocks) shows right now: its tasks,
+    assignments and events, sorted, and how many match in total. For a
+    note, returns the note's text. Read-only."""
+    with _session() as session:
+        block = blocks_service.get_block(session, block_id)
+        if block is None:
+            return {"error": f"No block '{block_id}'. Use list_blocks."}
+        if block.kind == "note":
+            return {"name": block.name, "kind": "note", "text": block.config.get("text", "")}
+        result = blocks_service.block_items(session, block_id)
+        return {"name": block.name, "kind": "smart_list", **result.model_dump(mode="json")}
 
 
 @mcp.resource("tasks://today")

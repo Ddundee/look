@@ -248,6 +248,8 @@ See [`VIEWS.md`](VIEWS.md).
 |---|---|
 | `list_views` | Dashboard, Today and custom views: name, icon, sidebar visibility, whether customized |
 | `get_view` | One view with its widgets (type, size, height, visible, config) |
+| `list_blocks` | Your blocks library: smart lists (saved filters) and notes, and which views show each |
+| `get_block_items` | What a smart list shows right now (tasks, assignments, events), or a note's text |
 
 ## Resources (read-only)
 

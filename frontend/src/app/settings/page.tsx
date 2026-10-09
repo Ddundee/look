@@ -9,6 +9,7 @@ import { useCatalog } from "@/lib/catalog";
 import { getServerThemeSnapshot, getThemeSnapshot, subscribeTheme } from "@/lib/theme";
 import type { CalendarSubscription, UpdateStatus } from "@/lib/types";
 import { CARD } from "@/lib/ui";
+import { useBlocks } from "@/lib/blocksStore";
 import { useViews } from "@/lib/viewsStore";
 import { LEGACY_HASHES, SETTINGS_GROUPS } from "@/components/settings/sections";
 
@@ -23,6 +24,7 @@ export default function SettingsOverview() {
   const theme = useSyncExternalStore(subscribeTheme, getThemeSnapshot, getServerThemeSnapshot);
   const { courses, categories, loaded: catalogLoaded } = useCatalog();
   const { views, loaded: viewsLoaded } = useViews();
+  const { blocks, loaded: blocksLoaded } = useBlocks();
   const [feeds, setFeeds] = useState<CalendarSubscription[] | null>(null);
   const [update, setUpdate] = useState<UpdateStatus | null>(null);
 
@@ -45,6 +47,11 @@ export default function SettingsOverview() {
     appearance: `${theme === "dark" ? "Dark" : "Light"} theme`,
     views: viewsLoaded
       ? `${plural(custom.length, "custom view")}${customizedSystem.length ? ` · ${customizedSystem.join(" and ")} customized` : ""}`
+      : null,
+    blocks: blocksLoaded
+      ? blocks.length === 0
+        ? "No blocks yet"
+        : `${plural(blocks.filter((b) => b.kind === "smart_list").length, "smart list")} · ${plural(blocks.filter((b) => b.kind === "note").length, "note")}`
       : null,
     courses: catalogLoaded ? plural(courses.filter((c) => !c.archived).length, "course") : null,
     categories: catalogLoaded

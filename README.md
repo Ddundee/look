@@ -131,7 +131,7 @@ The web app and MCP server use the same backend logic and PostgreSQL database, s
 - [MCP setup](docs/MCP.md)
 - [LeetCode tracking](docs/LEETCODE.md)
 - [Calendar subscriptions (ICS)](docs/CALENDARS.md)
-- [Views and dashboards](docs/VIEWS.md)
+- [Views, dashboards and blocks](docs/VIEWS.md)
 - [Task model](docs/TASK_MODEL.md)
 - [Tailscale](docs/TAILSCALE.md)
 

@@ -12,6 +12,7 @@ import {
   ForkKnifeIcon,
   ListChecksIcon,
   PlusCircleIcon,
+  SquaresFourIcon,
   type Icon,
 } from "@phosphor-icons/react";
 import type { WidgetType } from "@/lib/views/widgets";
@@ -26,6 +27,7 @@ import {
   WeekStatsWidget,
   type WidgetProps,
 } from "./widgets";
+import BlockBody from "../blocks/BlockBody";
 
 export interface WidgetView {
   component: React.ComponentType<WidgetProps>;
@@ -42,4 +44,6 @@ export const WIDGET_VIEWS: Record<WidgetType, WidgetView> = {
   nutrition_summary: { component: NutritionSummaryWidget, icon: ForkKnifeIcon, link: { href: "/nutrition", label: "Food log" } },
   week_stats: { component: WeekStatsWidget, icon: ChartBarIcon, link: { href: "/completed", label: "Completed" } },
   leetcode_summary: { component: LeetCodeSummaryWidget, icon: CodeIcon, link: { href: "/leetcode", label: "LeetCode" } },
+  // Title, icon and color come from the block itself (see ViewPage).
+  block: { component: BlockBody, icon: SquaresFourIcon },
 };
