@@ -9,6 +9,10 @@ import type {
   Category,
   Course,
   WorkPlan,
+  AiWaitQueue,
+  DailyChallenge,
+  DailyFloor,
+  TodaysThree,
   CalendarSubscription,
   CalendarSyncResult,
   LeetCodeAttempt,
@@ -158,6 +162,23 @@ export const api = {
 
   unplanFromToday: (id: string) =>
     request<Task>(`/api/tasks/${id}/unplan-today`, { method: "POST" }),
+
+  createRecurringTask: (payload: {
+    title: string;
+    pattern: "daily" | "weekdays";
+    start_date: string;
+    tags?: string[];
+    category?: string;
+    estimated_duration?: number | null;
+  }) => request<{ id: string }>("/api/recurring-tasks", { method: "POST", body: JSON.stringify(payload) }),
+
+  getDailyFloor: () => request<DailyFloor>("/api/today/floor"),
+  getTodaysThree: () => request<TodaysThree>("/api/today/three"),
+  getAiWait: (limit?: number) => request<AiWaitQueue>(`/api/today/ai-wait${qs({ limit })}`),
+  getChallenge: () => request<DailyChallenge>("/api/today/challenge"),
+  anotherChallenge: () => request<DailyChallenge>("/api/today/challenge/another", { method: "POST" }),
+  setChallengeDone: (done: boolean) =>
+    request<DailyChallenge>(`/api/today/challenge/${done ? "done" : "undo"}`, { method: "POST" }),
 
   getToday: () => request<TodayView>("/api/today"),
   getWeekSummary: (start_date?: string) =>

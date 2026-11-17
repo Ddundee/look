@@ -20,7 +20,7 @@ const w = (type: string, id = type, extra: Partial<Widget> = {}): Widget =>
   ({ id, type, size: "half", height: "medium", visible: true, config: {}, ...extra }) as Widget;
 
 test("registry: every widget's defaults are among its allowed values", () => {
-  assert.equal(WIDGET_TYPES.length, 9);
+  assert.equal(WIDGET_TYPES.length, 13);
   for (const def of Object.values(WIDGET_DEFS)) {
     assert.ok(def.sizes.includes(def.defaultSize), def.type);
     assert.ok(def.heights.includes(def.defaultHeight), def.type);

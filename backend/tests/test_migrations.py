@@ -612,3 +612,25 @@ def test_blocks_migration_is_additive_and_guarded(db):
     migrations.downgrade(db, "0008_views", allow_data_loss=True)
     assert "blocks" not in tables_in(db)
     assert snapshot(db, BASELINE_TABLES) == before
+
+
+def test_daily_challenges_migration_keeps_challenge_history_unless_told(db):
+    # 0010 only adds daily_challenges; downgrading it must not silently
+    # drop a day's challenge, and tasks are never involved.
+    from app.models import DailyChallenge
+
+    migrations.migrate(db)
+    with Session(db) as session:
+        seed_core(session)
+        session.add(DailyChallenge(day=date(2026, 11, 17), challenge_key="sunset", shown=["sunset"]))
+        session.commit()
+    tasks_before = snapshot(db, ["tasks"])
+    with pytest.raises(RuntimeError, match="allow-data-loss"):
+        migrations.downgrade(db, "0009_blocks")
+    assert "daily_challenges" in tables_in(db)
+
+    migrations.downgrade(db, "0009_blocks", allow_data_loss=True)
+    assert "daily_challenges" not in tables_in(db)
+    assert snapshot(db, ["tasks"]) == tasks_before
+    assert migrations.migrate(db) == migrations.head_revision()
+    assert "daily_challenges" in tables_in(db)

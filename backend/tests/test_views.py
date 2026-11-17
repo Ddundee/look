@@ -20,8 +20,27 @@ def test_system_views_come_from_app_defaults_without_rows(session):
     views = views_svc.list_views(session)
     assert [v.key for v in views] == ["dashboard", "today"]
     assert all(v.kind == "system" and not v.customized for v in views)
-    assert [x.type for x in views[1].widgets] == ["things_to_do", "schedule", "leetcode_summary"]
+    # Today leads with what a good day looks like; Things to do is no
+    # longer on it by default but stays a widget anyone can add.
+    assert [x.type for x in views[1].widgets] == [
+        "daily_floor", "todays_three", "schedule", "leetcode_summary", "ai_wait_queue", "break_default"]
+    assert "things_to_do" in views_svc.WIDGETS
+    assert "things_to_do" in [x.type for x in views[0].widgets]  # Dashboard keeps it
     assert session.exec(select(View)).all() == []  # nothing stored until customized
+
+
+def test_new_today_default_leaves_a_customized_today_alone(session):
+    mine = [w("things_to_do", "two_thirds", "full"), w("schedule", "third", "tall")]
+    views_svc.save_layout(session, "today", mine)
+    assert [x.type for x in views_svc.get_view(session, "today").widgets] == ["things_to_do", "schedule"]
+
+
+def test_today_default_fills_one_desktop_screen():
+    # Three tall thirds over three short thirds: 12 columns, 6 row units.
+    rows = {"short": 2, "medium": 3, "tall": 4, "full": 6}
+    cols = {"quarter": 3, "third": 4, "half": 6, "two_thirds": 8, "full": 12}
+    layout = views_svc.SYSTEM_VIEWS["today"].layout
+    assert sum(cols[x["size"]] * rows[x["height"]] for x in layout) == 12 * 6
 
 
 def test_layout_persists_and_reset_restores_current_default(session):
@@ -141,3 +160,20 @@ def test_frontend_registry_matches(session):
     src = (pathlib.Path(__file__).resolve().parents[2] / "frontend/src/lib/views/widgets.ts").read_text()
     union = src[src.index("export type WidgetType ="):src.index(";", src.index("export type WidgetType ="))]
     assert set(re.findall(r'"([a-z_]+)"', union)) == set(views_svc.WIDGETS)
+
+    # Sizes, heights, defaults and multiple must match too, widget by widget.
+    defs = src[src.index("export const WIDGET_DEFS"):src.index("export const WIDGET_TYPES")]
+    entries = dict(re.findall(r"\n  ([a-z_]+): \{(.*?)(?=\n  [a-z_]+: \{|\n\};)", defs, re.S))
+    assert set(entries) == set(views_svc.WIDGETS)
+
+    def strings(body, key):
+        m = re.search(rf"\b{key}: \[([^\]]*)\]", body)
+        return tuple(re.findall(r'"([a-z_]+)"', m.group(1))) if m else None
+
+    for key, spec in views_svc.WIDGETS.items():
+        body = entries[key]
+        assert (strings(body, "sizes") or views_svc.ALL_SIZES) == tuple(spec.sizes), key
+        assert (strings(body, "heights") or views_svc.ALL_HEIGHTS) == tuple(spec.heights), key
+        assert re.search(rf'defaultSize: "{spec.default_size}"', body), key
+        assert re.search(rf'defaultHeight: "{spec.default_height}"', body), key
+        assert ("multiple: true" in body) == spec.multiple, key

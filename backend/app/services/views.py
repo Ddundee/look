@@ -97,6 +97,15 @@ WIDGETS: Dict[str, WidgetSpec] = {
                              "quarter", "medium", sizes=("quarter", "third", "half")),
     "leetcode_summary": WidgetSpec("LeetCode", "Solved today and this week against your goals, and your streak.",
                                    "third", "short", sizes=("quarter", "third", "half", "full"), heights=("short", "medium")),
+    # What a good day looks like (app.services.daily); plain tasks underneath.
+    "daily_floor": WidgetSpec("Daily Floor", "The few things that make today a win: tasks tagged daily-floor.",
+                              "third", "tall", sizes=("third", "half", "two_thirds", "full")),
+    "todays_three": WidgetSpec("Today's 3", "The three things you actually want done today, chosen from your tasks.",
+                               "third", "tall", sizes=("third", "half", "two_thirds", "full")),
+    "ai_wait_queue": WidgetSpec("While AI runs", "Small useful tasks tagged ai-wait, for while an agent works.",
+                                "third", "short", sizes=("quarter", "third", "half"), heights=("short", "medium", "tall")),
+    "break_default": WidgetSpec("Break the default", "One optional small challenge to do something different today.",
+                                "third", "short", sizes=("quarter", "third", "half"), heights=("short", "medium")),
     # A smart list or note from your blocks library; any number per view.
     "block": WidgetSpec("Block", "A smart list or note you built. Edit it once, it changes on every view.",
                         "third", "medium", multiple=True, config=BlockRefConfig),
@@ -139,11 +148,16 @@ SYSTEM_VIEWS: Dict[str, SystemView] = {
         _w("things_to_do", "quarter", "tall"),
         _w("week_preview", "half", "medium"),
     ]),
-    # Today as it has been: things to do beside the schedule and LeetCode.
+    # Today: what a good day looks like, not everything that could be done.
+    # Three columns of the day's essentials, then three small helpers; in
+    # this order on phones. Things to do stays available from Add widget.
     "today": SystemView("today", "Today", "sun", [
-        _w("things_to_do", "two_thirds", "full"),
+        _w("daily_floor", "third", "tall"),
+        _w("todays_three", "third", "tall"),
         _w("schedule", "third", "tall"),
         _w("leetcode_summary", "third", "short"),
+        _w("ai_wait_queue", "third", "short"),
+        _w("break_default", "third", "short"),
     ]),
 }
 

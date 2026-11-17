@@ -8,6 +8,7 @@ from app.models.enums import (
     TaskStatus,
 )
 from app.models.calendars import CalendarSubscription
+from app.models.daily import DailyChallenge
 from app.models.events import Event, EventOverride
 from app.models.leetcode import LeetCodeAttempt, LeetCodeGoals, LeetCodeProblem
 from app.models.nutrition import FoodEntry, NutritionTarget
@@ -24,6 +25,7 @@ __all__ = [
     "CourseLink",
     "CalendarSourceType",
     "CalendarSubscription",
+    "DailyChallenge",
     "LeetCodeDifficulty",
     "LeetCodeAttempt",
     "LeetCodeGoals",

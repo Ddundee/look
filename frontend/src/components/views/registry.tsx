@@ -9,10 +9,14 @@ import {
   CalendarDotsIcon,
   ChartBarIcon,
   CodeIcon,
+  CompassIcon,
   ForkKnifeIcon,
   ListChecksIcon,
+  ListNumbersIcon,
   PlusCircleIcon,
+  RobotIcon,
   SquaresFourIcon,
+  TrophyIcon,
   type Icon,
 } from "@phosphor-icons/react";
 import type { WidgetType } from "@/lib/views/widgets";
@@ -27,6 +31,7 @@ import {
   WeekStatsWidget,
   type WidgetProps,
 } from "./widgets";
+import { AiWaitQueueWidget, BreakDefaultWidget, DailyFloorWidget, TodaysThreeWidget } from "./dailyWidgets";
 import BlockBody from "../blocks/BlockBody";
 
 export interface WidgetView {
@@ -44,6 +49,10 @@ export const WIDGET_VIEWS: Record<WidgetType, WidgetView> = {
   nutrition_summary: { component: NutritionSummaryWidget, icon: ForkKnifeIcon, link: { href: "/nutrition", label: "Food log" } },
   week_stats: { component: WeekStatsWidget, icon: ChartBarIcon, link: { href: "/completed", label: "Completed" } },
   leetcode_summary: { component: LeetCodeSummaryWidget, icon: CodeIcon, link: { href: "/leetcode", label: "LeetCode" } },
+  daily_floor: { component: DailyFloorWidget, icon: TrophyIcon },
+  todays_three: { component: TodaysThreeWidget, icon: ListNumbersIcon, link: { href: "/tasks", label: "All tasks" } },
+  ai_wait_queue: { component: AiWaitQueueWidget, icon: RobotIcon },
+  break_default: { component: BreakDefaultWidget, icon: CompassIcon },
   // Title, icon and color come from the block itself (see ViewPage).
   block: { component: BlockBody, icon: SquaresFourIcon },
 };

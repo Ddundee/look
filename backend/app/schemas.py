@@ -127,6 +127,27 @@ class TodayView(BaseModel):
     suggested_high_priority: List[TaskRead]
 
 
+class ConsistencyDay(BaseModel):
+    date: date
+    floor_total: int  # Daily Floor items that day (0: no floor, neither won nor lost)
+    floor_done: int
+    floor_won: bool  # every Daily Floor item done
+    leetcode: bool  # solved at least one problem
+    challenge: bool  # did that day's Break-the-default challenge
+
+
+class WeekConsistency(BaseModel):
+    """How the week went against what you said you wanted (Mon-Sun)."""
+
+    start_date: date
+    days: List[ConsistencyDay]
+    floor_won_days: int
+    floor_days: int  # days that had a Daily Floor at all, up to today
+    leetcode_days: int
+    challenge_days: int
+    elapsed_days: int  # days of this week so far (today included)
+
+
 class WeekSummary(BaseModel):
     start_date: date
     end_date: date
@@ -135,6 +156,53 @@ class WeekSummary(BaseModel):
     created_count: int
     overdue_count: int
     completed_tasks: List[TaskRead]
+    consistency: Optional[WeekConsistency] = None
+
+
+# ---------------------------------------------------------------------------
+# Daily: Daily Floor, Today's 3, While AI Runs, Break the default
+# (app.services.daily). All but the challenge are plain tasks.
+# ---------------------------------------------------------------------------
+
+
+class DailyFloor(BaseModel):
+    date: date
+    items: List[TaskRead]  # tasks tagged daily-floor for the day, done ones included
+    done: int
+    total: int
+    won: bool  # every item done (and there is at least one)
+    streak: int  # won days in a row; days without a floor don't break it
+    week: List[ConsistencyDay]
+
+
+class TodaysThree(BaseModel):
+    date: date
+    items: List[TaskRead]  # at most 3 tasks planned for the day, most important first
+    planned_total: int  # every task planned for the day (excluding Daily Floor)
+    more: int  # planned beyond the three shown
+
+
+class AiWaitQueue(BaseModel):
+    items: List[TaskRead]  # open ai-wait tasks, short ones (<= 30 min) first
+    total: int
+
+
+class DailyChallengeRead(BaseModel):
+    date: date
+    key: str
+    text: str
+    done: bool
+    completed_at: Optional[datetime] = None
+
+
+class DailyPlan(BaseModel):
+    """Everything that makes a good day, for MCP clients."""
+
+    date: date
+    floor: DailyFloor
+    todays_three: TodaysThree
+    ai_wait: AiWaitQueue
+    challenge: DailyChallengeRead
 
 
 # ---------------------------------------------------------------------------

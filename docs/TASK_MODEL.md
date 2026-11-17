@@ -60,6 +60,18 @@ writes back to `task.priority`.**
 `get_priority_ranked_tasks` (MCP) and `GET /api/tasks/ranked` (REST) both
 return tasks sorted by this score, each with its `priority_reasons` list.
 
+## Tags with a meaning
+
+Tags are free text, but two drive Today (see [Views](VIEWS.md#today)),
+matched ignoring case and a leading `#`:
+
+- `daily-floor`: part of that day's Daily Floor. Not reported as
+  overdue once its day has passed.
+- `ai-wait`: a small task for while an AI agent runs.
+
+Reopening a task (status back from `completed`) clears `completed_at`;
+setting `completed` by status stamps it, the same as the complete action.
+
 ## Today view
 
 `services/tasks.get_today_bundle` assembles, for a given date:

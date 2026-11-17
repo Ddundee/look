@@ -1,12 +1,22 @@
 from datetime import date
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session
 
 from app.deps import get_db, require_auth
 from app.models.enums import TaskPriority
-from app.schemas import TaskListResponse, TodayView, WeekSummary, WorkPlan
+from app.schemas import (
+    AiWaitQueue,
+    DailyChallengeRead,
+    DailyFloor,
+    TaskListResponse,
+    TodayView,
+    TodaysThree,
+    WeekSummary,
+    WorkPlan,
+)
+from app.services import daily as daily_service
 from app.services import planning as planning_service
 from app.services import tasks as tasks_service
 from app.utils import local_today
@@ -39,6 +49,48 @@ def get_work(day: Optional[date] = Query(default=None, alias="date"), session: S
     return planning_service.work_plan(session, day)
 
 
+@router.get("/today/floor", response_model=DailyFloor)
+def get_floor(session: Session = Depends(get_db)):
+    """Today's Daily Floor: tasks tagged daily-floor, progress, streak and
+    this week. Complete items with the normal task endpoints."""
+    return daily_service.floor(session)
+
+
+@router.get("/today/three", response_model=TodaysThree)
+def get_todays_three(session: Session = Depends(get_db)):
+    """Up to three tasks planned for today. Choose with plan-today /
+    unplan-today, which never change a due date."""
+    return daily_service.todays_three(session)
+
+
+@router.get("/today/ai-wait", response_model=AiWaitQueue)
+def get_ai_wait(limit: int = Query(default=daily_service.AI_WAIT_LIMIT, ge=1, le=50), session: Session = Depends(get_db)):
+    return daily_service.ai_wait(session, limit=limit)
+
+
+@router.get("/today/challenge", response_model=DailyChallengeRead)
+def get_challenge(session: Session = Depends(get_db)):
+    return daily_service.challenge(session)
+
+
+@router.post("/today/challenge/another", response_model=DailyChallengeRead)
+def another_challenge(session: Session = Depends(get_db)):
+    try:
+        return daily_service.another_challenge(session)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+
+
+@router.post("/today/challenge/done", response_model=DailyChallengeRead)
+def challenge_done(session: Session = Depends(get_db)):
+    return daily_service.set_challenge_done(session, True)
+
+
+@router.post("/today/challenge/undo", response_model=DailyChallengeRead)
+def challenge_undo(session: Session = Depends(get_db)):
+    return daily_service.set_challenge_done(session, False)
+
+
 @router.get("/overdue", response_model=TaskListResponse)
 def get_overdue(session: Session = Depends(get_db)):
     tasks = tasks_service.get_overdue(session)
@@ -64,6 +116,7 @@ def week_summary(start_date: Optional[date] = None, session: Session = Depends(g
         created_count=bundle["created_count"],
         overdue_count=bundle["overdue_count"],
         completed_tasks=[tasks_service.serialize_task(t) for t in bundle["completed_tasks"]],
+        consistency=daily_service.week_consistency(session, bundle["start_date"]),
     )
 
 

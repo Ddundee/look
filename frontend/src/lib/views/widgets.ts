@@ -11,6 +11,10 @@ export type WidgetType =
   | "nutrition_summary"
   | "week_stats"
   | "leetcode_summary"
+  | "daily_floor"
+  | "todays_three"
+  | "ai_wait_queue"
+  | "break_default"
   | "block";
 
 export const SIZES = ["quarter", "third", "half", "two_thirds", "full"] as const;
@@ -76,6 +80,14 @@ export const WIDGET_DEFS: Record<WidgetType, WidgetDef> = {
     sizes: ["quarter", "third", "half"], defaultSize: "quarter", defaultHeight: "medium" },
   leetcode_summary: { ...all, type: "leetcode_summary", title: "LeetCode", description: "Solved today and this week, and your streak.",
     sizes: ["quarter", "third", "half", "full"], defaultSize: "third", heights: ["short", "medium"], defaultHeight: "short" },
+  daily_floor: { ...all, type: "daily_floor", title: "Daily Floor", description: "The few things that make today a win.",
+    sizes: ["third", "half", "two_thirds", "full"], defaultSize: "third", defaultHeight: "tall" },
+  todays_three: { ...all, type: "todays_three", title: "Today's 3", description: "The three things you actually want done today.",
+    sizes: ["third", "half", "two_thirds", "full"], defaultSize: "third", defaultHeight: "tall" },
+  ai_wait_queue: { ...all, type: "ai_wait_queue", title: "While AI runs", description: "Small useful tasks for while an agent works.",
+    sizes: ["quarter", "third", "half"], defaultSize: "third", heights: ["short", "medium", "tall"], defaultHeight: "short" },
+  break_default: { ...all, type: "break_default", title: "Break the default", description: "One optional challenge to do something different.",
+    sizes: ["quarter", "third", "half"], defaultSize: "third", heights: ["short", "medium"], defaultHeight: "short" },
   // A smart list or note from the blocks library, placed by id; added from
   // "Your blocks" in Add widget, never from the widget list.
   block: { ...all, type: "block", title: "Block", description: "A smart list or note you built.",

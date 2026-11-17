@@ -18,6 +18,15 @@ ACTIVE_STATUSES = (
     TaskStatus.blocked,
 )
 
+# Tags with a meaning in Look (see app.services.daily). Matching ignores
+# case and a leading '#'.
+FLOOR_TAG = "daily-floor"
+AI_WAIT_TAG = "ai-wait"
+
+
+def has_tag(task: Task, tag: str) -> bool:
+    return any(t.strip().lstrip("#").lower() == tag for t in (task.tags or []))
+
 
 def _touch(task: Task) -> None:
     task.updated_at = utcnow()
@@ -111,6 +120,13 @@ def update_task(session: Session, task: Task, data: TaskUpdate) -> Task:
     updates = data.model_dump(exclude_unset=True)
     for field_name, value in updates.items():
         setattr(task, field_name, value)
+    if "status" in updates:
+        # Reopening a task clears its completion; completing it by status
+        # stamps one, the same as complete_task.
+        if task.status == TaskStatus.completed:
+            task.completed_at = task.completed_at or utcnow()
+        else:
+            task.completed_at = None
     if "category" in updates:
         categories_service.ensure(session, task.category)
     _touch(task)
@@ -230,7 +246,8 @@ def get_overdue(session: Session, today: Optional[date] = None) -> List[Task]:
         .where(Task.due_date < today, Task.status.in_(ACTIVE_STATUSES))
         .order_by(Task.due_date)
     )
-    return list(session.exec(query).all())
+    # A missed Daily Floor item belongs to its day; it isn't a debt.
+    return [t for t in session.exec(query).all() if not has_tag(t, FLOOR_TAG)]
 
 
 def get_upcoming(session: Session, today: Optional[date] = None, days: int = 7) -> List[Task]:
@@ -347,6 +364,7 @@ def serialize_task(task: Task, today: Optional[date] = None) -> TaskRead:
         task.due_date is not None
         and task.due_date < today
         and task.status not in (TaskStatus.completed, TaskStatus.cancelled)
+        and not has_tag(task, FLOOR_TAG)
     )
 
     return TaskRead(

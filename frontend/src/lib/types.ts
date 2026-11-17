@@ -70,6 +70,62 @@ export interface WeekSummary {
   created_count: number;
   overdue_count: number;
   completed_tasks: Task[];
+  consistency?: WeekConsistency | null;
+}
+
+// ---- Daily: Daily Floor, Today's 3, While AI runs, Break the default --------
+// (backend app.services.daily; all but the challenge are ordinary tasks)
+
+export const FLOOR_TAG = "daily-floor";
+export const AI_WAIT_TAG = "ai-wait";
+
+export interface ConsistencyDay {
+  date: string;
+  floor_total: number;
+  floor_done: number;
+  floor_won: boolean;
+  leetcode: boolean;
+  challenge: boolean;
+}
+
+export interface WeekConsistency {
+  start_date: string;
+  days: ConsistencyDay[];
+  floor_won_days: number;
+  floor_days: number;
+  leetcode_days: number;
+  challenge_days: number;
+  elapsed_days: number;
+}
+
+export interface DailyFloor {
+  date: string;
+  items: Task[];
+  done: number;
+  total: number;
+  won: boolean;
+  streak: number;
+  week: ConsistencyDay[];
+}
+
+export interface TodaysThree {
+  date: string;
+  items: Task[];
+  planned_total: number;
+  more: number;
+}
+
+export interface AiWaitQueue {
+  items: Task[];
+  total: number;
+}
+
+export interface DailyChallenge {
+  date: string;
+  key: string;
+  text: string;
+  done: boolean;
+  completed_at: string | null;
 }
 
 export interface TaskCreatePayload {

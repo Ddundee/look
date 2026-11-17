@@ -233,6 +233,7 @@ Colors and styles are fixed keys, never CSS. See
 | Tool | Description |
 |---|---|
 | `get_work_plan` | Tasks and imported assignments to do: overdue, today, and undated open tasks (top few by priority) |
+| `get_daily_plan` | What a good day looks like: Daily Floor progress (done/total, won, streak, this week), Today's 3, the ai-wait queue and the day's Break-the-default challenge |
 | `list_courses` | Courses with aliases, linked Canvas courses and item counts |
 | `create_course` / `update_course` | Add, rename, restyle or archive a course; set aliases |
 | `map_event_to_course` | Set (or clear) an event's/assignment's course; for Canvas items it's remembered for that whole course |

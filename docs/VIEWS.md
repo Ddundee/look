@@ -22,6 +22,10 @@ mirrors it, and a backend test fails if the two drift.
 | `nutrition_summary` | Calories and macros today | |
 | `week_stats` | This week: tasks done, events, average kcal | |
 | `leetcode_summary` | LeetCode today, this week, streak | |
+| `daily_floor` | Daily Floor: tasks tagged `daily-floor` for today, progress, **DAY WON**, streak, Leisure | |
+| `todays_three` | Today's 3: up to three tasks planned for today, with a chooser | |
+| `ai_wait_queue` | While AI runs: open `ai-wait` tasks, ≤ 30 min first, with quick add | |
+| `break_default` | Break the default: one optional challenge a day | |
 | `block` | A block from your library (below) | which block (`block_id`) |
 
 Each widget has a **size** (¼, ⅓, ½, ⅔ or full width of the 12-column
@@ -29,6 +33,47 @@ desktop grid; some widgets allow only some sizes) and a **height**
 (short, medium, tall, full; a sixth of the screen per unit, so the
 default layouts fit one screen). Tablets use two columns, phones one,
 both at natural height. A view holds at most 24 widgets.
+
+`week_stats` also shows this week's consistency: days the Daily Floor
+was won, days with a LeetCode solve, and days the challenge was done.
+
+## Today
+
+Today's default is about what a good day looks like, not everything you
+could do: Daily Floor, Today's 3 and Schedule, then LeetCode, While AI
+runs and Break the default (phones show them in that order). Things to do
+is still a widget; add it back from Customize, and it stays on the
+Dashboard. A Today you've customized keeps your layout.
+
+How the daily widgets work (`app/services/daily.py`):
+
+- **Daily Floor** is ordinary tasks tagged `daily-floor` whose
+  `planned_for_date` (else `due_date`) is the day. "Add a habit" makes a
+  daily recurring task with the tag, so there's one per day and those
+  rows are the history. A day is won when every item is completed. The
+  streak counts won days in a row; today doesn't break it until it's
+  over, and days with no floor items are skipped. A missed floor item is
+  never listed as overdue. Leisure 🔒/✓ is encouragement only: nothing is
+  blocked or scored.
+- **Today's 3** is tasks with `planned_for_date` = today, ordered by
+  priority, then due date, then age (not by done, so checking one off
+  never pulls in another). More than three shows "+N more planned".
+  Choosing or removing one only sets `planned_for_date`; the due date
+  never changes. Daily Floor items aren't counted.
+- **While AI runs** is open, not-blocked tasks tagged `ai-wait`: those of
+  30 minutes or less first, then unknown length, then longer, each by
+  priority. A recurring one shows only today's occurrence. Quick add
+  reads a trailing duration ("Read one article 15m").
+- **Break the default** picks from a curated list in code. The day's pick
+  is stored (`daily_challenges`, migration `0010`) so it's the same on
+  every refresh and device; "Give me another" doesn't repeat one already
+  offered that day, and a challenge chosen in the last 7 days isn't
+  picked again while others remain. Skipping it never counts against you.
+
+API: `GET /api/today/floor`, `GET /api/today/three`,
+`GET /api/today/ai-wait`, `GET /api/today/challenge`,
+`POST /api/today/challenge/another|done|undo`; `GET /api/week-summary`
+includes `consistency`. MCP: `get_daily_plan`.
 
 ## Blocks
 

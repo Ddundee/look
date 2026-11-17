@@ -12,7 +12,7 @@ import { compactTime } from "@/lib/calendarEvents";
 import { notifyTasksChanged, onEventsChanged, onTasksChanged } from "@/lib/events";
 import { addDaysIso, formatDateLong, todayIso } from "@/lib/format";
 import { fmtGrams, fmtKcal, MACRO_LABEL, MACROS } from "@/lib/nutrition";
-import type { DaySummary, MacroKey, Occurrence } from "@/lib/types";
+import type { ConsistencyDay, DaySummary, MacroKey, Occurrence, WeekConsistency } from "@/lib/types";
 import { useNow } from "@/lib/useNow";
 import { weekRangeIso } from "@/lib/week";
 import QuickAddBar from "@/components/QuickAddBar";
@@ -21,6 +21,7 @@ import AgendaList from "@/components/events/AgendaList";
 import { ItemEdge, useLook } from "@/components/look/Look";
 import TargetsModal from "@/components/nutrition/TargetsModal";
 import WeekChart from "@/components/nutrition/WeekChart";
+import WeekDots from "./WeekDots";
 import { useWidgetCount, WidgetEmpty, WidgetError, WidgetLoading } from "./WidgetShell";
 
 /** What widgets need from the page they're on. */
@@ -334,6 +335,7 @@ export function WeekStatsWidget() {
           </div>
         ))}
       </dl>
+      {week.data?.consistency && <Consistency week={week.data.consistency} today={today} />}
       {history.data && (
         <div className="mt-auto hidden pt-6 sm:block">
           <WeekChart
@@ -361,6 +363,33 @@ export function WeekStatsWidget() {
         </p>
       )}
     </div>
+  );
+}
+
+/** Days this week you did what you said you wanted: won the Daily Floor,
+ * solved a LeetCode problem, broke the default. */
+function Consistency({ week, today }: { week: WeekConsistency; today: string }) {
+  const rows: { label: string; count: number; filled: (d: ConsistencyDay) => boolean }[] = [
+    { label: "Day won", count: week.floor_won_days, filled: (d) => d.floor_won },
+    { label: "LeetCode", count: week.leetcode_days, filled: (d) => d.leetcode },
+    { label: "Something new", count: week.challenge_days, filled: (d) => d.challenge },
+  ];
+  return (
+    <dl className="mt-4 space-y-1.5">
+      {rows.map((r, i) => (
+        <div key={r.label} className="flex items-center justify-between gap-2">
+          <dt className="min-w-0 text-xs text-fg-muted">
+            {r.label}{" "}
+            <span className="font-mono tabular-nums text-fg">
+              {r.count}/{week.elapsed_days}
+            </span>
+          </dt>
+          <dd>
+            <WeekDots days={week.days} today={today} filled={r.filled} label={`${r.label} this week`} weekdays={i === rows.length - 1} />
+          </dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 

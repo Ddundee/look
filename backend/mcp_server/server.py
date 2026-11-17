@@ -60,6 +60,7 @@ from app.security import constant_time_equals
 from app.services import calendar_sync
 from app.services import categories as categories_service
 from app.services import courses as courses_service
+from app.services import daily as daily_service
 from app.services import planning as planning_service
 from app.services import blocks as blocks_service
 from app.services import views as views_service
@@ -97,7 +98,11 @@ mcp = MCPServer(
         "is_deadline/deadline=true) can be checked off with "
         "set_deadline_completed; find them with get_deadlines or "
         "find_events. get_work_plan lists tasks and assignments to do "
-        "together. Assignments and class meetings carry their course "
+        "together. get_daily_plan is what a good day looks like: the Daily "
+        "Floor (tasks tagged daily-floor; all done = day won), Today's 3 "
+        "(tasks planned for today; plan with plan_task_for_today, which "
+        "never changes a due date), small ai-wait tasks for while an agent "
+        "runs, and the day's optional Break-the-default challenge. Assignments and class meetings carry their course "
         "(class); map_event_to_course fixes a wrong or missing one. Dates are ISO "
         "'YYYY-MM-DD', times are "
         "'HH:MM' 24-hour."
@@ -205,10 +210,14 @@ def search_tasks(query: str) -> List[dict]:
 def get_week_summary(start_date: Optional[str] = None) -> dict:
     """Summarize a week (Mon-Sun, defaults to the current week): tasks
     completed, counts by category, tasks created, and tasks still overdue
-    by week's end. Use this to answer 'what did I accomplish this week'."""
+    by week's end; consistency has, per day, whether the Daily Floor was
+    won, a LeetCode problem solved and the Break-the-default challenge
+    done. Use this to answer 'what did I accomplish this week' or 'am I
+    being consistent'."""
     with _session() as session:
         parsed = date.fromisoformat(start_date) if start_date else None
         bundle = tasks_service.get_week_summary(session, parsed)
+        consistency = daily_service.week_consistency(session, bundle["start_date"]).model_dump(mode="json")
         return {
             "start_date": bundle["start_date"].isoformat(),
             "end_date": bundle["end_date"].isoformat(),
@@ -217,6 +226,7 @@ def get_week_summary(start_date: Optional[str] = None) -> dict:
             "created_count": bundle["created_count"],
             "overdue_count": bundle["overdue_count"],
             "completed_tasks": _tasks_list(bundle["completed_tasks"]),
+            "consistency": consistency,
         }
 
 
@@ -1248,6 +1258,25 @@ def get_work_plan(day: Optional[str] = None) -> dict:
         return _error(exc)
     with _session() as session:
         return planning_service.work_plan(session, parsed).model_dump(mode="json")
+
+
+@mcp.tool()
+def get_daily_plan(day: Optional[str] = None) -> dict:
+    """What a good day looks like (default today): floor (Daily Floor:
+    tasks tagged daily-floor, done/total, won = every one done, streak of
+    won days, this week), todays_three (at most 3 tasks planned for the
+    day, most important first; `more` counts extra planned ones),
+    ai_wait (open tasks tagged ai-wait, <= 30 min first, for while an AI
+    agent runs) and challenge (the day's optional Break-the-default
+    challenge; skipping it never counts against the day). Complete tasks
+    with complete_task. To suggest the next thing to do, prefer an open
+    floor item, then Today's 3."""
+    try:
+        parsed = _parse_day(day, "day")
+    except ValueError as exc:
+        return _error(exc)
+    with _session() as session:
+        return daily_service.daily_plan(session, parsed).model_dump(mode="json")
 
 
 @mcp.tool()
