@@ -93,7 +93,7 @@ WIDGETS: Dict[str, WidgetSpec] = {
                                "half", "medium", sizes=("half", "two_thirds", "full")),
     "nutrition_summary": WidgetSpec("Calories today", "Today's calories and macros against your targets.",
                                     "quarter", "medium", sizes=("quarter", "third", "half")),
-    "week_stats": WidgetSpec("This week", "Tasks done, events ahead and average calories this week.",
+    "week_stats": WidgetSpec("This week", "Tasks done, events ahead, and days won, with LeetCode and something new.",
                              "quarter", "medium", sizes=("quarter", "third", "half")),
     "leetcode_summary": WidgetSpec("LeetCode", "Solved today and this week against your goals, and your streak.",
                                    "third", "short", sizes=("quarter", "third", "half", "full"), heights=("short", "medium")),
@@ -139,11 +139,11 @@ class SystemView:
 
 
 SYSTEM_VIEWS: Dict[str, SystemView] = {
-    # The Dashboard as it has been: overview, calories, week, schedule, to-do, next 7 days.
+    # Overview: add, the week, schedule, to-do, next 7 days. Calories are a
+    # utility now (the Nutrition page, or add the widget), not a default.
     "dashboard": SystemView("dashboard", "Dashboard", "squares", [
         _w("quick_add", "half", "short"),
-        _w("nutrition_summary", "quarter", "medium"),
-        _w("week_stats", "quarter", "medium"),
+        _w("week_stats", "half", "medium"),
         _w("schedule", "quarter", "tall"),
         _w("things_to_do", "quarter", "tall"),
         _w("week_preview", "half", "medium"),

@@ -9,8 +9,8 @@ It runs on my own hardware and can be used from the web or through MCP clients l
 - **Tasks** — create, edit, complete, prioritize, and schedule tasks
 - **Today** — see what is planned, due, or overdue in one place
 - **Calendar** — manage one-time and recurring events, and subscribe to ICS feeds like Canvas that stay in sync
-- **Nutrition** — log food and track daily calorie and macro targets
 - **LeetCode** — log attempts, track streaks, goals, difficulty, topics, and confidence
+- **Nutrition** (optional) — a food log with calorie and macro targets, on its own page
 - **MCP** — let compatible AI clients read and update the same data
 - **Self-hosted** — runs locally with Docker and PostgreSQL
 

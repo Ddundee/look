@@ -35,12 +35,23 @@ def test_new_today_default_leaves_a_customized_today_alone(session):
     assert [x.type for x in views_svc.get_view(session, "today").widgets] == ["things_to_do", "schedule"]
 
 
-def test_today_default_fills_one_desktop_screen():
-    # Three tall thirds over three short thirds: 12 columns, 6 row units.
+@pytest.mark.parametrize("key", ["dashboard", "today"])
+def test_system_defaults_fill_one_desktop_screen(key):
+    # 12 columns by 6 row units, with no gaps.
     rows = {"short": 2, "medium": 3, "tall": 4, "full": 6}
     cols = {"quarter": 3, "third": 4, "half": 6, "two_thirds": 8, "full": 12}
-    layout = views_svc.SYSTEM_VIEWS["today"].layout
+    layout = views_svc.SYSTEM_VIEWS[key].layout
     assert sum(cols[x["size"]] * rows[x["height"]] for x in layout) == 12 * 6
+
+
+def test_calories_are_not_a_default_but_still_available(session):
+    # Nutrition is a utility: off the built-in defaults (and the Overview
+    # preset), but the widget can still be added and saved.
+    for sv in views_svc.SYSTEM_VIEWS.values():
+        assert "nutrition_summary" not in [x["type"] for x in sv.layout]
+    assert "nutrition_summary" not in [x["type"] for x in views_svc.PRESETS["overview"]]
+    saved = views_svc.save_layout(session, "dashboard", [w("nutrition_summary")])
+    assert [x.type for x in saved.widgets] == ["nutrition_summary"]
 
 
 def test_layout_persists_and_reset_restores_current_default(session):

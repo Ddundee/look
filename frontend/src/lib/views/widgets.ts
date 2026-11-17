@@ -76,7 +76,7 @@ export const WIDGET_DEFS: Record<WidgetType, WidgetDef> = {
     sizes: ["half", "two_thirds", "full"], defaultSize: "half", defaultHeight: "medium" },
   nutrition_summary: { ...all, type: "nutrition_summary", title: "Calories today", description: "Calories and macros against your targets.",
     sizes: ["quarter", "third", "half"], defaultSize: "quarter", defaultHeight: "medium" },
-  week_stats: { ...all, type: "week_stats", title: "This week", description: "Tasks done, events ahead and average calories.",
+  week_stats: { ...all, type: "week_stats", title: "This week", description: "Tasks done, events ahead and how consistent the week was.",
     sizes: ["quarter", "third", "half"], defaultSize: "quarter", defaultHeight: "medium" },
   leetcode_summary: { ...all, type: "leetcode_summary", title: "LeetCode", description: "Solved today and this week, and your streak.",
     sizes: ["quarter", "third", "half", "full"], defaultSize: "third", heights: ["short", "medium"], defaultHeight: "short" },

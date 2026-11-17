@@ -19,8 +19,8 @@ mirrors it, and a backend test fails if the two drift.
 | `schedule` | Today's schedule with the now line | include assignments |
 | `upcoming_assignments` | Assignments due soon, by day | next 3/7/14 days |
 | `week_preview` | Next 7 days | |
-| `nutrition_summary` | Calories and macros today | |
-| `week_stats` | This week: tasks done, events, average kcal | |
+| `nutrition_summary` | Calories and macros today (not on any default; add it if you want it) | |
+| `week_stats` | This week: tasks done, events ahead, consistency | |
 | `leetcode_summary` | LeetCode today, this week, streak | |
 | `daily_floor` | Daily Floor: tasks tagged `daily-floor` for today, progress, **DAY WON**, streak, Leisure | |
 | `todays_three` | Today's 3: up to three tasks planned for today, with a chooser | |
@@ -36,6 +36,11 @@ both at natural height. A view holds at most 24 widgets.
 
 `week_stats` also shows this week's consistency: days the Daily Floor
 was won, days with a LeetCode solve, and days the challenge was done.
+
+Nutrition is a utility, not a dashboard concept: the Dashboard default
+no longer has Calories today, `week_stats` no longer shows calories, and
+Nutrition sits last in the sidebar. The Nutrition page, its API, MCP
+tools and data are unchanged.
 
 ## Today
 

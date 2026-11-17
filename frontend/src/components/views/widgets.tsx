@@ -5,7 +5,6 @@
 // frame around them (title, edit controls) is WidgetShell.
 import { createContext, useContext, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { FireIcon } from "@phosphor-icons/react";
 import { api } from "@/lib/api";
 import { compactTime } from "@/lib/calendarEvents";
@@ -14,13 +13,11 @@ import { addDaysIso, formatDateLong, todayIso } from "@/lib/format";
 import { fmtGrams, fmtKcal, MACRO_LABEL, MACROS } from "@/lib/nutrition";
 import type { ConsistencyDay, DaySummary, MacroKey, Occurrence, WeekConsistency } from "@/lib/types";
 import { useNow } from "@/lib/useNow";
-import { weekRangeIso } from "@/lib/week";
 import QuickAddBar from "@/components/QuickAddBar";
 import WorkList from "@/components/WorkList";
 import AgendaList from "@/components/events/AgendaList";
 import { ItemEdge, useLook } from "@/components/look/Look";
 import TargetsModal from "@/components/nutrition/TargetsModal";
-import WeekChart from "@/components/nutrition/WeekChart";
 import WeekDots from "./WeekDots";
 import { useWidgetCount, WidgetEmpty, WidgetError, WidgetLoading } from "./WidgetShell";
 
@@ -313,19 +310,15 @@ export function NutritionSummaryWidget() {
 // ---- This week ----------------------------------------------------------------------
 
 export function WeekStatsWidget() {
-  const router = useRouter();
   const today = useToday();
-  const thisWeek = weekRangeIso(today);
   const week = useLive(() => api.getWeekSummary(), []);
   const events = useLive(() => api.getSchedule(today, addDaysIso(today, 6)).then((s) => s.occurrences.length), [today]);
-  const history = useLive(() => api.getNutritionHistory(thisWeek.start, thisWeek.end), [thisWeek.start]);
   return (
     <div className="flex h-full flex-col">
-      <dl className="grid grid-cols-3 gap-2">
+      <dl className="grid grid-cols-2 gap-2">
         {[
           { label: "Tasks done", value: week.data?.completed_count },
           { label: "Events ahead", value: events.data ?? undefined },
-          { label: "Avg kcal", value: history.data?.averages ? fmtKcal(history.data.averages.calories) : history.data ? "-" : undefined },
         ].map((s) => (
           <div key={s.label}>
             <dd className="font-mono text-xl font-medium tabular-nums tracking-tight text-fg">
@@ -336,24 +329,13 @@ export function WeekStatsWidget() {
         ))}
       </dl>
       {week.data?.consistency && <Consistency week={week.data.consistency} today={today} />}
-      {history.data && (
-        <div className="mt-auto hidden pt-6 sm:block">
-          <WeekChart
-            days={history.data.days}
-            selected={today}
-            lastSelectable={today}
-            onSelect={(iso) => router.push(iso === today ? "/nutrition" : `/nutrition?date=${iso}`)}
-          />
-        </div>
-      )}
-      {(week.error || history.error || events.error) && (
+      {(week.error || events.error) && (
         <p className="mt-2 text-xs text-danger">
           Some numbers couldn&apos;t load.{" "}
           <button
             type="button"
             onClick={() => {
               week.retry();
-              history.retry();
               events.retry();
             }}
             className="font-medium underline underline-offset-4"
