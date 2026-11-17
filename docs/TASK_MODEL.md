@@ -30,7 +30,11 @@ A template (`title`, `category`, `priority`, `pattern`, ...) that
 whenever `get_today` (or the `tasks://today` MCP resource) runs, it calls
 `ensure_occurrences_for_date` for the current day, which is idempotent: it
 checks for an existing `Task` with the same `(recurrence_rule_id,
-occurrence_date)` before creating one. Each occurrence is its own `Task`
+occurrence_date)` before creating one. Several requests do this at once
+(Today's widgets load together), so the database enforces one row per
+rule and day (unique index `uq_tasks_rule_occurrence`, migration `0011`,
+which also removed duplicates made before it, keeping a completed copy);
+a request that loses the race rolls back and looks again. Each occurrence is its own `Task`
 row, so completing one occurrence never touches any other — history is
 never corrupted by recurrence.
 

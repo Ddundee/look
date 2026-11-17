@@ -112,3 +112,52 @@ def test_completing_one_occurrence_does_not_affect_others(session):
 
     refreshed_tomorrow = tasks_service.get_task(session, occ_tomorrow.id)
     assert refreshed_tomorrow.status.value != "completed"
+
+
+def test_racing_requests_make_one_occurrence(engine, monkeypatch):
+    # Today's widgets load at once and each materializes today's
+    # occurrences. One that checks, then loses the race to another
+    # request, must not add a second row (this made Daily Floor items
+    # show up 2-4 times).
+    from sqlmodel import Session, select
+
+    from app.models.task import Task
+
+    real = recurrence_service._materialized_rule_ids
+    raced = []
+
+    def check_then_lose(session, d):
+        seen = real(session, d)
+        if not raced:  # the other request runs and commits right after our check
+            raced.append(None)
+            with Session(engine) as other:
+                raced.append(recurrence_service.ensure_occurrences_for_date(other, d))
+        return seen
+
+    with Session(engine) as s:
+        make_rule(s, pattern=RecurrencePattern.daily, start_date=local_today())
+        make_rule(s, title="Second", pattern=RecurrencePattern.daily, start_date=local_today())
+        monkeypatch.setattr(recurrence_service, "_materialized_rule_ids", check_then_lose)
+        mine = recurrence_service.ensure_occurrences_for_date(s, local_today())
+
+    assert len(raced[1]) == 2 and mine == []  # the other request's rows stand
+    with Session(engine) as s:
+        assert sorted(t.title for t in s.exec(select(Task)).all()) == ["Recurring test", "Second"]
+
+
+def test_the_database_refuses_a_second_occurrence(session):
+    import pytest
+    from sqlalchemy.exc import IntegrityError
+
+    from app.models.task import Task
+
+    rule = make_rule(session, pattern=RecurrencePattern.daily, start_date=local_today())
+    recurrence_service.ensure_occurrences_for_date(session, local_today())
+    session.add(Task(title="dup", recurrence_rule_id=rule.id, occurrence_date=local_today()))
+    with pytest.raises(IntegrityError):
+        session.commit()
+    session.rollback()
+    # Tasks without a rule are unaffected.
+    session.add(Task(title="one"))
+    session.add(Task(title="two"))
+    session.commit()

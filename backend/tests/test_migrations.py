@@ -634,3 +634,37 @@ def test_daily_challenges_migration_keeps_challenge_history_unless_told(db):
     assert snapshot(db, ["tasks"]) == tasks_before
     assert migrations.migrate(db) == migrations.head_revision()
     assert "daily_challenges" in tables_in(db)
+
+
+def test_duplicate_recurring_occurrences_are_merged_keeping_completed(db):
+    # Before 0011, racing requests could make 2-4 rows for one rule and day.
+    migrations.migrate(db)
+    migrations.downgrade(db, "0010_daily_challenges")
+    with Session(db) as session:
+        seed_core(session)
+        session.commit()
+        rule_id = session.exec(sa.select(RecurrenceRule.id)).first()[0]
+        tasks = sa.Table("tasks", sa.MetaData(), autoload_with=session.connection())
+        day = date(2026, 11, 17)
+
+        def row(id_, status, minute, occurrence=day):
+            return dict(id=id_, title="50 pushups", status=status, priority="medium", category="health", tags=[],
+                        source="recurring", recurrence_rule_id=rule_id, occurrence_date=occurrence, due_date=occurrence,
+                        created_at=datetime(2026, 11, 17, 6, minute), updated_at=datetime(2026, 11, 17, 6, minute))
+
+        session.execute(sa.insert(tasks), [
+            row("dup-a", "todo", 1), row("dup-b", "completed", 2), row("dup-c", "todo", 3),  # one day, three rows
+            row("solo", "todo", 4, date(2026, 11, 16)),
+        ])
+        session.execute(sa.insert(tasks), [dict(row("plain-1", "todo", 5), recurrence_rule_id=None, occurrence_date=None),
+                                           dict(row("plain-2", "todo", 6), recurrence_rule_id=None, occurrence_date=None)])
+        session.commit()
+        before = {r[0] for r in session.execute(sa.text("SELECT id FROM tasks"))}
+
+    assert migrations.migrate(db) == migrations.head_revision()
+    with Session(db) as session:
+        after = {r[0] for r in session.execute(sa.text("SELECT id FROM tasks"))}
+    # The completed copy stands; the others go; nothing else is touched.
+    assert before - after == {"dup-a", "dup-c"}
+    assert {"dup-b", "solo", "plain-1", "plain-2"} <= after
+    migrations.check_drift(db)

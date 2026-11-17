@@ -1,5 +1,7 @@
 from datetime import date
-from typing import List
+from typing import List, Set
+
+from sqlalchemy.exc import IntegrityError
 
 from sqlmodel import Session, select
 
@@ -53,28 +55,19 @@ def occurs_on(rule: RecurrenceRule, d: date) -> bool:
     return False
 
 
-def ensure_occurrences_for_date(session: Session, d: date) -> List[Task]:
-    """
-    Idempotently materialize a Task row for every active recurrence rule
-    that fires on date `d`. Safe to call repeatedly (e.g. on every
-    `get_today` request) — existing occurrences are never duplicated or
-    modified, which keeps completion history intact.
-    """
+def _materialized_rule_ids(session: Session, d: date) -> Set[str]:
+    return set(session.exec(
+        select(Task.recurrence_rule_id).where(Task.occurrence_date == d, Task.recurrence_rule_id.is_not(None))
+    ).all())
+
+
+def _materialize(session: Session, d: date) -> List[Task]:
     rules = session.exec(select(RecurrenceRule).where(RecurrenceRule.active == True)).all()  # noqa: E712
+    done = _materialized_rule_ids(session, d)
     created: List[Task] = []
-
     for rule in rules:
-        if not occurs_on(rule, d):
+        if rule.id in done or not occurs_on(rule, d):
             continue
-
-        existing = session.exec(
-            select(Task).where(
-                Task.recurrence_rule_id == rule.id, Task.occurrence_date == d
-            )
-        ).first()
-        if existing is not None:
-            continue
-
         task = Task(
             title=rule.title,
             description=rule.description,
@@ -95,5 +88,24 @@ def ensure_occurrences_for_date(session: Session, d: date) -> List[Task]:
         session.commit()
         for task in created:
             session.refresh(task)
-
     return created
+
+
+def ensure_occurrences_for_date(session: Session, d: date) -> List[Task]:
+    """
+    Idempotently materialize a Task row for every active recurrence rule
+    that fires on date `d`. Safe to call repeatedly (e.g. on every
+    `get_today` request) — existing occurrences are never duplicated or
+    modified, which keeps completion history intact.
+
+    Several requests do this at once (Today's widgets load together), so
+    the database enforces one row per (rule, day) (uq_tasks_rule_occurrence)
+    and a request that loses the race rolls back and looks again: the
+    other request's rows stand.
+    """
+    for _ in range(3):
+        try:
+            return _materialize(session, d)
+        except IntegrityError:
+            session.rollback()
+    return []

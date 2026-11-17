@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime, time
 from typing import List, Optional
 
-from sqlalchemy import Column, JSON, String
+from sqlalchemy import Column, Index, JSON, String
 from sqlmodel import Field, Relationship, SQLModel
 
 from app.models.enums import RecurrencePattern, TaskPriority, TaskStatus
@@ -54,6 +54,12 @@ class RecurrenceRule(SQLModel, table=True):
 
 class Task(SQLModel, table=True):
     __tablename__ = "tasks"
+    # One occurrence per rule per day, enforced by the database: several
+    # requests materialize today's occurrences at once (migration 0011).
+    # Tasks without a rule (NULLs) are unaffected.
+    __table_args__ = (
+        Index("uq_tasks_rule_occurrence", "recurrence_rule_id", "occurrence_date", unique=True),
+    )
 
     id: str = Field(default_factory=_uuid, primary_key=True)
 
